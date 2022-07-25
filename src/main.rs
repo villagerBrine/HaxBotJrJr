@@ -1,0 +1,139 @@
+use std::env;
+
+use serenity::framework::standard::macros::group;
+use serenity::http::Http;
+use tracing::{error, info};
+use tracing_subscriber::fmt;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::EnvFilter;
+
+use haxbotjr::commands::config::*;
+use haxbotjr::commands::member::*;
+use haxbotjr::commands::meta::*;
+use haxbotjr::commands::owner::*;
+use haxbotjr::commands::staff_util::*;
+use haxbotjr::data::BotData;
+
+#[group]
+#[commands(ping, set_custom_nick)]
+struct General;
+
+#[group]
+#[commands(display_profile, stat_leaderboard)]
+struct Statistics;
+
+#[group]
+#[commands(list_member, display_member_info)]
+struct Members;
+
+#[group("Member Management")]
+#[commands(
+    link_profile,
+    unlink_profile,
+    add_partial,
+    add_member,
+    remove_member,
+    set_member_rank,
+    promote_member,
+    demote_member,
+    fix_nick,
+    fix_role,
+    sync_member_ign
+)]
+struct MemberManagement;
+
+#[group]
+#[commands(get_rank_symbols, utc_now)]
+struct Utilities;
+
+#[group]
+#[commands(list_tags, list_log_channels)]
+struct Configuration;
+
+#[group]
+#[owners_only]
+#[commands(sql, check_db_integrity)]
+struct Owner;
+
+#[tokio::main]
+async fn main() {
+    // Initialization
+    dotenv::dotenv().expect("Failed to load .env file");
+
+    let file_appender = tracing_appender::rolling::daily("./log", "log");
+    let (file_writer, _guard) = tracing_appender::non_blocking(file_appender);
+    tracing::subscriber::set_global_default(
+        fmt::Subscriber::builder()
+            .with_env_filter(EnvFilter::from_default_env())
+            .finish()
+            .with(fmt::Layer::default().with_ansi(false).with_writer(file_writer)),
+    )
+    .expect("Failed to set global log subscriber");
+
+    // Get global variables
+    let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
+    let http = Http::new(&token);
+
+    // Creating client
+    let bot_data = BotData::new("./database/member.db", "./config.json").await;
+    let framework = haxbotjr::my_framework(&http)
+        .await
+        .help(&MY_HELP)
+        .group(&GENERAL_GROUP)
+        .group(&STATISTICS_GROUP)
+        .group(&MEMBERS_GROUP)
+        .group(&MEMBERMANAGEMENT_GROUP)
+        .group(&CONFIGURATION_GROUP)
+        .group(&UTILITIES_GROUP)
+        .group(&OWNER_GROUP);
+    let mut client = haxbotjr::my_client(&token, framework, bot_data.discord_signal.clone())
+        .await
+        .expect("Failed to create client");
+    bot_data.add_to_client(&client).await;
+
+    // Start loops
+    let data = bot_data.clone();
+    event::timer::start_loop(data.timer_signal).await;
+
+    let data = bot_data.clone();
+    let cache_http = client.cache_and_http.clone();
+    haxbotjr::logging::start_loop(cache_http, data.config, data.wynn_signal).await;
+
+    let data = bot_data.clone();
+    let cache_http = client.cache_and_http.clone();
+    haxbotjr::loops::start_loops(cache_http, data.db, data.config, data.wynn_signal, data.discord_signal)
+        .await;
+
+    let data = bot_data.clone();
+    memberdb::loops::start_loops(
+        data.db,
+        data.config,
+        data.voice_tracker,
+        data.wynn_signal,
+        data.discord_signal,
+        data.timer_signal,
+    )
+    .await;
+
+    let data = bot_data.clone();
+    config::start_loop(data.config, data.discord_signal).await;
+
+    let data = bot_data.clone();
+    wynn::loops::start_loops(data.wynn_signal, data.reqwest_client, data.wynn_cache, data.db).await;
+
+    let shard_manager = client.shard_manager.clone();
+    tokio::spawn(async move {
+        info!("Starting ctrl+c handler");
+        tokio::signal::ctrl_c().await.expect("Could not register ctrl+c handler");
+
+        // shutdown codes
+        bot_data.wynn_cache.store().await;
+        bot_data.config.read().await.store("./config.json");
+        shard_manager.lock().await.shutdown_all().await;
+    });
+
+    // Start client
+    if let Err(why) = client.start().await {
+        error!("Client error: {:?}", why);
+    }
+}

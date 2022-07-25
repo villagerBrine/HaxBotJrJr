@@ -1,0 +1,37 @@
+-- Add migration script here
+CREATE TABLE discord (
+    id INTEGER PRIMARY KEY NOT NULL UNIQUE,
+    mid INTEGER UNIQUE,
+    message INTEGER NOT NULL DEFAULT 0,
+    message_week INTEGER NOT NULL DEFAULT 0,
+    image INTEGER NOT NULL DEFAULT 0,
+    reaction INTEGER NOT NULL DEFAULT 0,
+    voice INTEGER NOT NULL DEFAULT 0,
+    voice_week INTEGER NOT NULL DEFAULT 0,
+    activity INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE wynn (
+    id TEXT PRIMARY KEY NOT NULL UNIQUE,
+    mid INTEGER UNIQUE,
+    guild INTEGER NOT NULL DEFAULT 0 CHECK(guild IN (0,1)),
+    ign CHAR(16) NOT NULL,
+    emerald INTEGER NOT NULL DEFAULT 0,
+    emerald_week INTEGER NOT NULL DEFAULT 0,
+    activity INTEGER NOT NULL DEFAULT 0,
+    activity_week INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE guild (
+    id TEXT PRIMARY KEY NOT NULL UNIQUE,
+    rank TEXT NOT NULL,
+    xp INTEGER NOT NULL DEFAULT 0,
+    xp_week INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE member (
+    discord INTEGER UNIQUE,
+    mcid TEXT UNIQUE,
+    type TEXT NOT NULL,
+    rank TEXT NOT NULL
+);
