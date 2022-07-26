@@ -18,6 +18,8 @@ pub async fn start_loops(signal: WynnSignal, client: Client, cache: Arc<Cache>, 
     let shared_signal = signal.clone();
     let shared_client = client.clone();
     tokio::spawn(async move {
+        // This is to make sure wynn events are sent after receivers are created
+        std::thread::sleep(std::time::Duration::from_secs(5));
         main_guild_api_loop(shared_signal, &shared_client, &cache).await;
     });
 
@@ -74,7 +76,7 @@ async fn main_guild_api_loop(signal: WynnSignal, client: &Client, cache: &Cache)
                 None => {
                     // This is needed so database can be populated during the bot's initial run
                     info!("Emitting MemberJoin events for all members due to empty guild cache");
-                    for member in &resp.members {
+                    for member in resp_map.values() {
                         events.push(WynnEvent::MemberJoin {
                             id: member.uuid.clone(),
                             rank: member.rank.clone(),
