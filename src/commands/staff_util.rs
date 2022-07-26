@@ -22,9 +22,14 @@ use crate::{cmd_bail, data, finish};
 async fn fix_nick(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let db = data!(ctx, "db");
 
+    let username = args.rest();
+    if username.is_empty() {
+        finish!(ctx, msg, "Target discord user not provided")
+    }
+
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
     let discord_member = some!(
-        ctx!(util::discord::get_member_named(&ctx.http, &guild, args.rest()).await)?,
+        ctx!(util::discord::get_member_named(&ctx.http, &guild, username).await)?,
         finish!(ctx, msg, "Can't find specified discord user")
     );
 
