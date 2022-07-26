@@ -1,0 +1,875 @@
+{
+  "db": "SQLite",
+  "03a56e589559b15a1f26c0707d50ca477f81df1f22a702749d4a2092d1e9b91d": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT id FROM wynn WHERE ign=?"
+  },
+  "121138205bc75c206d62b41de0e65e52b1ebd46c1a2e7d0a96e88a802f0e410e": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 3
+      }
+    },
+    "query": "UPDATE discord SET message=message+?,message_week=message_week+? WHERE id=?"
+  },
+  "131fb5cfdde791b5e336c2ac9149c9a32b88f5979cb0742880fd2497043de108": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT id FROM wynn WHERE mid NOT NULL AND NOT EXISTS (SELECT 1 FROM member WHERE oid=wynn.mid AND mcid=wynn.id)"
+  },
+  "158a4b406e86f3891ef61a25f198a81ff8495ed1590de6dd6f9dd5436c0877e7": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "UPDATE member SET rank=? WHERE oid=?"
+  },
+  "2876039b6e67b084e42d02fea15a903ab7179d7d74d37264ba460418535f59b4": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "UPDATE member SET type=? WHERE oid=?"
+  },
+  "2f5b0b7fe9844cd08d548d62f23f96eb4ad315edc0384562a0bca3886a177cfd": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "UPDATE wynn SET activity_week=0"
+  },
+  "2f7cc44a8eeb16840dfc81b08d2fca208387218d336aba1aebe3b8431737466b": {
+    "describe": {
+      "columns": [
+        {
+          "name": "rowid",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT oid FROM member WHERE oid=?"
+  },
+  "3074cc956337699b91910255e95dba088a076b70afe6d62e313320f5b1df5bf0": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT id FROM wynn WHERE id=?"
+  },
+  "30c4687c9bbb5e76db991e706e9fad7a4999c589ae84308ce31264ff9ed4bea4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "ign",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT ign FROM wynn WHERE mid NOT NULL"
+  },
+  "315022fb04a03c4e0ebeff123703b789a08cd2495a8a0ae4530e13d7b8240984": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 3
+      }
+    },
+    "query": "UPDATE discord SET voice=voice+?,voice_week=voice_week+? WHERE id=?"
+  },
+  "334b5524a02e66ce6469b2993d38d5fd061aceba456c2755915dc63499946097": {
+    "describe": {
+      "columns": [
+        {
+          "name": "rowid",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT oid FROM member WHERE (discord IS NULL AND mcid IS NULL) OR (discord NOT NULL AND NOT EXISTS (SELECT 1 FROM discord WHERE id=member.discord AND mid=member.oid))"
+  },
+  "395330a4fef62c0f0582e30ee827976115ffaa152394fc972f1458373423d7ba": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 3
+      }
+    },
+    "query": "INSERT INTO wynn (id,mid,ign) VALUES (?,?,?)"
+  },
+  "3e70f86cc33a34d690b6113febdbe3420c380bc1fb793036c9bd142da138d4f1": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT id FROM guild WHERE id=?"
+  },
+  "43170d0b5b5ebe7e325ff1cd8e4a63afbda45d4f8c7f21be397c43c0b7058047": {
+    "describe": {
+      "columns": [
+        {
+          "name": "mid",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        true
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT mid FROM discord WHERE id=?"
+  },
+  "4ccfa9481bb9b7387febf4bc6525bbac370f7513019c0430b8651feab6b373c4": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "rank",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "xp",
+          "ordinal": 2,
+          "type_info": "Int64"
+        },
+        {
+          "name": "xp_week",
+          "ordinal": 3,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM guild WHERE id=?"
+  },
+  "4e07125f31689243c30fb5814fc403ba6eaacf4a73b81f4cc8a19cc1795fa69f": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Text"
+        },
+        {
+          "name": "mid",
+          "ordinal": 1,
+          "type_info": "Int64"
+        },
+        {
+          "name": "guild",
+          "ordinal": 2,
+          "type_info": "Int64"
+        },
+        {
+          "name": "ign",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "emerald",
+          "ordinal": 4,
+          "type_info": "Int64"
+        },
+        {
+          "name": "emerald_week",
+          "ordinal": 5,
+          "type_info": "Int64"
+        },
+        {
+          "name": "activity",
+          "ordinal": 6,
+          "type_info": "Int64"
+        },
+        {
+          "name": "activity_week",
+          "ordinal": 7,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM wynn WHERE id=?"
+  },
+  "4ebf3db1a7426b15d9d78c4a61778126ceec2e647dcb6fa162aa895d6b0e38bf": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "UPDATE member SET mcid=? WHERE oid=?"
+  },
+  "4fdaa5eb410a9f8c1439cebb1265279562ca482cb25cdbebe2960c57166e658b": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "UPDATE member SET discord=? WHERE oid=?"
+  },
+  "506581bbcf1f9e11d587fb8c44bdf5c525ff747f712e4be02f807665176c9293": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "UPDATE guild SET rank=? WHERE id=?"
+  },
+  "5536017d412855eab615e3931fc64b7b4f1c28a2c1250e7c158dc95c2401ac28": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 3
+      }
+    },
+    "query": "INSERT INTO member (mcid,type,rank) VALUES (?,?,?)"
+  },
+  "5bd9282d0cbce5c80689b919c961ead372b92a6b5674fbcad52976225f8b3bf2": {
+    "describe": {
+      "columns": [
+        {
+          "name": "rowid",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT oid FROM member WHERE (discord NOT NULL AND NOT EXISTS (SELECT 1 FROM discord WHERE id=member.discord AND mid=member.oid)) OR (mcid NOT NULL AND NOT EXISTS (SELECT 1 FROM wynn WHERE id=member.mcid AND mid=member.oid))"
+  },
+  "601db2a9a5d80259d68ab4fe37e8153f27fe0928a1dea4bdc2dd3e7c2a7bf8be": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "member_type",
+          "ordinal": 1,
+          "type_info": "Text"
+        },
+        {
+          "name": "discord",
+          "ordinal": 2,
+          "type_info": "Int64"
+        },
+        {
+          "name": "mcid",
+          "ordinal": 3,
+          "type_info": "Text"
+        },
+        {
+          "name": "rank",
+          "ordinal": 4,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false,
+        false,
+        true,
+        true,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT oid AS id,type AS member_type,discord,mcid,rank FROM member WHERE oid=?"
+  },
+  "6370f862625c9ccabe3e902746f1bd38467aeedbc47cfc972912f04b1cc649f8": {
+    "describe": {
+      "columns": [
+        {
+          "name": "guild",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT guild FROM wynn WHERE id=?"
+  },
+  "64e2cf18683a4ee6c363b6b49b4f4a03b469ebd74bed86ebc9111bed04585bfe": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 3
+      }
+    },
+    "query": "UPDATE guild SET xp=xp+?,xp_week=xp_week+? WHERE id=?"
+  },
+  "69f041c2e3d0e648e293c47b04721a3eebedda40406dc7c94ca848648a71cc0d": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT id FROM discord WHERE id=?"
+  },
+  "6b50a0f8318e79c4c2d4d758d071ab864e107abb9a51d7b952f42a5f53271951": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 4
+      }
+    },
+    "query": "INSERT INTO member (discord,mcid,type,rank) VALUES (?,?,?,?)"
+  },
+  "720c2eeb90c9d270597f19467f00683d87846505718f68e3823c2d3b15a0e17b": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "UPDATE wynn SET guild=? WHERE id=?"
+  },
+  "748351fc1bb45b0cf523853df79f9eafc9d42cd2f8053548a536adc2c4b9c118": {
+    "describe": {
+      "columns": [
+        {
+          "name": "ign",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT ign FROM wynn WHERE id=?"
+  },
+  "763f191b23d41c47a520c3a240837b42ac6964c6e3c3c29a8c98a717a8930e11": {
+    "describe": {
+      "columns": [
+        {
+          "name": "mcid",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        true
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT mcid FROM member where oid=?"
+  },
+  "7a78cbd8d386424e5c8c8ffe604e689d78a4b5b35bf286aaab3a68c4669293bf": {
+    "describe": {
+      "columns": [
+        {
+          "name": "rowid",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT oid FROM member WHERE (discord NOT NULL AND mcid NOT NULL AND type!='full') OR (discord NOT NULL AND mcid IS NULL AND type!='discord') OR (discord IS NULL AND mcid NOT NULL AND NOT (SELECT guild FROM wynn WHERE id=member.mcid) AND type!='wynn') OR (discord IS NULL AND mcid NOT NULL AND (SELECT guild FROM wynn WHERE id=member.mcid) AND type!='guild')"
+  },
+  "82d43343a59afd4d74b1f57cb30ad386454afb70c224224b83b8d015126c9a78": {
+    "describe": {
+      "columns": [
+        {
+          "name": "member_type",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT type AS member_type FROM member WHERE oid=?"
+  },
+  "87189cfff5ffd849a33ac2fcfe5bba6fa4c01a1b5148f9fa4813b0afae621aaf": {
+    "describe": {
+      "columns": [
+        {
+          "name": "rank",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT rank FROM guild WHERE id=?"
+  },
+  "8b8ba1187604617352a61ea6bb28ad2255538d8e97d0b7e9e50eb5b8c19e5748": {
+    "describe": {
+      "columns": [
+        {
+          "name": "discord",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        true
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT discord FROM member where oid=?"
+  },
+  "932c25f8dac23c11da864098614a2fbce85b353ed426a85c557a95a4e3ac039f": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT id FROM wynn WHERE guild AND NOT EXISTS (SELECT 1 FROM guild WHERE id=wynn.id) OR NOT guild AND EXISTS (SELECT 1 FROM guild WHERE id=wynn.id)"
+  },
+  "944e4cdde37389843fd2200336026e66ae6fda9a987f4edd33f5fa9f6c3bb522": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "DELETE FROM member WHERE oid=?"
+  },
+  "9b3456e77ef80f8a40284e7617ba83d9baa76e117490c2440ed33c8053851ac3": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "INSERT INTO guild (id,rank) VALUES (?,?) "
+  },
+  "9e20c2fff7e825980593111a8bdb32fff63af7af7bff64f0d5b1736dbd1f6062": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "UPDATE discord SET mid=? WHERE id=?"
+  },
+  "9f57dbf82e156d45aeefe87574ccb77dcce99d1252f92f437d5f167f65462912": {
+    "describe": {
+      "columns": [
+        {
+          "name": "discord",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "mcid",
+          "ordinal": 1,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        true,
+        true
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT discord,mcid FROM member WHERE oid=?"
+  },
+  "a1df62102285237432f296321a71ccfc673a5d9732046b2e9d7c0b5b64171ded": {
+    "describe": {
+      "columns": [
+        {
+          "name": "mid",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        true
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT mid FROM wynn WHERE ign=?"
+  },
+  "a9f50eccc8dd0732e9f725a79817710afcb04cf522d9f0bbb49ae5a49952979d": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 3
+      }
+    },
+    "query": "INSERT INTO member (discord,type,rank) VALUES (?,?,?)"
+  },
+  "aff2eb3d452c3c50dd45fba3541d8a2360191fb604e32e73dcec9eacc11a80ec": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "UPDATE guild SET xp_week=0"
+  },
+  "b70891b9783fc602c93c9cfea9cdfbfcd618de6eb3ec93991f13f10a9aa57dc7": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT id FROM discord WHERE mid NOT NULL AND NOT EXISTS (SELECT 1 FROM member WHERE oid=discord.mid AND discord=discord.id)"
+  },
+  "b9ba586911d78b18b8f600799219fe27f8f2b8b9b115857e89c34032d074b722": {
+    "describe": {
+      "columns": [
+        {
+          "name": "xp",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT xp FROM guild WHERE id=?"
+  },
+  "bd1ebd8af83508a156ddf64d7c008aed7c49a8d32df39a747625f71c30b383e9": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        },
+        {
+          "name": "mid",
+          "ordinal": 1,
+          "type_info": "Int64"
+        },
+        {
+          "name": "message",
+          "ordinal": 2,
+          "type_info": "Int64"
+        },
+        {
+          "name": "message_week",
+          "ordinal": 3,
+          "type_info": "Int64"
+        },
+        {
+          "name": "image",
+          "ordinal": 4,
+          "type_info": "Int64"
+        },
+        {
+          "name": "reaction",
+          "ordinal": 5,
+          "type_info": "Int64"
+        },
+        {
+          "name": "voice",
+          "ordinal": 6,
+          "type_info": "Int64"
+        },
+        {
+          "name": "voice_week",
+          "ordinal": 7,
+          "type_info": "Int64"
+        },
+        {
+          "name": "activity",
+          "ordinal": 8,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false,
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT * FROM discord WHERE id=?"
+  },
+  "df6a04e8956601a9b4d2ef4c1a822bd6028069b06e9e0464553f6a58e46cc2dd": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "UPDATE wynn SET ign=? WHERE id=?"
+  },
+  "e562a81049297f705bffcd684272b19499026915dc7ee8909a837b73b2250202": {
+    "describe": {
+      "columns": [
+        {
+          "name": "mid",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        true
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT mid FROM wynn WHERE id=?"
+  },
+  "e8a5cdc136ef68aa71820ce7d1c920efb072debc3e7581bf863cb89620638711": {
+    "describe": {
+      "columns": [
+        {
+          "name": "rank",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT rank FROM member WHERE oid=?"
+  },
+  "ed62f093a7494c1e0cd9a56709096a7ee7fe6b8d9686261da458917e14d33fe5": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "UPDATE wynn SET mid=? WHERE id=?"
+  },
+  "eeee20d4a6fb874d57c0dbd34ef141fe1c8efbb56fcd49f392ee05f369020a10": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "UPDATE discord SET message_week=0,voice_week=0"
+  },
+  "f2fe1c9a4166b98bf90cb71469c02fdf3d5e677d359180a83c381477b4bb8b3f": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 3
+      }
+    },
+    "query": "UPDATE wynn SET activity=activity+?,activity_week=activity_week+? WHERE id=?"
+  },
+  "ffd2f47690d0ef07c295042c743837c4b3028d0596a9091f3b9c3ee256c61b04": {
+    "describe": {
+      "columns": [],
+      "nullable": [],
+      "parameters": {
+        "Right": 2
+      }
+    },
+    "query": "INSERT INTO discord (id,mid) VALUES (?,?)"
+  }
+}

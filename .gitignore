@@ -4,5 +4,4 @@
 /log/log.*
 todo.md
 config.json
-sqlx-data.json
 .env
