@@ -51,7 +51,6 @@ impl EventHandler for Handler {
     }
 
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
-        info!(?old, ?new, "voice state update");
         let event = match old {
             Some(old) => {
                 if new.channel_id.is_some() {

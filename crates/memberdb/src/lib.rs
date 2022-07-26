@@ -392,7 +392,6 @@ pub async fn discord_profile_exist(db: &DB, discord_id: DiscordId) -> Result<boo
 
 /// Update a discord profile's message count (assuming the profile exists).
 pub async fn update_message(db: &DB, amount: i64, discord_id: DiscordId) -> Result<()> {
-    info!(discord_id, amount, "Updating discord message count");
     query!(
         "UPDATE discord SET message=message+?,message_week=message_week+? WHERE id=?",
         amount,
@@ -435,7 +434,6 @@ pub async fn wynn_profile_exist(db: &DB, mcid: &str) -> Result<bool> {
 
 /// Update a wynn profile's online activity (assuming the profile exists).
 pub async fn update_activity(db: &DB, mcid: &str, amount: i64) -> Result<()> {
-    info!(mcid, amount, "Updating wynn online time");
     query!(
         "UPDATE wynn SET activity=activity+?,activity_week=activity_week+? WHERE id=?",
         amount,
