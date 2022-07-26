@@ -505,8 +505,11 @@ async fn set_rank(ctx: &Context, msg: &Message, db: &RwLock<DB>, mid: i64, old_r
         );
         ctx!(memberdb::get_member_rank(&db, mid).await)?
     };
+    if caller_rank <= old_rank {
+        finish!(ctx, msg, "You can't change the rank of someone with a higher or equal rank to yours")
+    }
     if caller_rank >= rank {
-        finish!(ctx, msg, "You can't set someone else to a rank that is higher or equal to your's");
+        finish!(ctx, msg, "You can't set someone else to a rank that is higher or equal to yours");
     }
 
     let result = {
@@ -538,6 +541,7 @@ async fn set_rank(ctx: &Context, msg: &Message, db: &RwLock<DB>, mid: i64, old_r
 /// Set a member's rank.
 /// Member is specified by `target`, which can be discord user or ign.
 /// `rank` can't be higher or equal to your own rank.
+/// The target can't be in a rank that higher or equal to yours.
 ///
 /// There are also shortcut commands: `promote` and `demote`
 ///
@@ -569,6 +573,7 @@ pub async fn set_member_rank(ctx: &Context, msg: &Message, mut args: Args) -> Co
 /// Promote member to a higher rank.
 /// Member is specified by `target`, which can be discord user or ign.
 /// `rank` can't be higher or equal to your own rank.
+/// The target can't be in a rank that higher or equal to yours.
 ///
 /// There are also the command `setRank` to set a member's rank directly.
 ///
@@ -600,6 +605,7 @@ pub async fn promote_member(ctx: &Context, msg: &Message, args: Args) -> Command
 /// Demote member to a higher rank.
 /// Member is specified by `target`, which can be discord user or ign.
 /// `rank` can't be higher or equal to your own rank.
+/// The target can't be in a rank that higher or equal to yours.
 ///
 /// There are also the command `setRank` to set a member's rank directly.
 ///

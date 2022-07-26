@@ -51,8 +51,8 @@ pub const MRANK_SIX_STR: &str = "Cadet";
 impl MemberRank {
     pub fn promote(&self) -> Option<Self> {
         if let Some(i) = MEMBER_RANKS.iter().position(|r| r == self) {
-            if i < MEMBER_RANKS.len() - 1 {
-                return Some(MEMBER_RANKS[i + 1]);
+            if i > 0 {
+                return Some(MEMBER_RANKS[i - 1]);
             }
         }
         None
@@ -60,8 +60,8 @@ impl MemberRank {
 
     pub fn demote(&self) -> Option<Self> {
         if let Some(i) = MEMBER_RANKS.iter().position(|r| r == self) {
-            if i > 0 {
-                return Some(MEMBER_RANKS[i - 1]);
+            if i < MEMBER_RANKS.len() - 1 {
+                return Some(MEMBER_RANKS[i + 1]);
             }
         }
         None
