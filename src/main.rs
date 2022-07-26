@@ -3,9 +3,9 @@ use std::env;
 use serenity::framework::standard::macros::group;
 use serenity::http::Http;
 use tracing::{error, info};
-use tracing_subscriber::fmt;
+use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{fmt, Layer};
 
 use haxbotjr::commands::config::*;
 use haxbotjr::commands::member::*;
@@ -63,10 +63,19 @@ async fn main() {
     let file_appender = tracing_appender::rolling::daily("./log", "log");
     let (file_writer, _guard) = tracing_appender::non_blocking(file_appender);
     tracing::subscriber::set_global_default(
-        fmt::Subscriber::builder()
-            .with_env_filter(EnvFilter::from_default_env())
-            .finish()
-            .with(fmt::Layer::default().with_ansi(false).with_writer(file_writer)),
+        tracing_subscriber::registry()
+            .with(
+                fmt::Layer::default()
+                    .with_ansi(false)
+                    .with_writer(file_writer)
+                    .with_filter(LevelFilter::INFO),
+            )
+            .with(
+                fmt::Layer::default()
+                    .with_ansi(true)
+                    .with_writer(std::io::stdout)
+                    .with_filter(LevelFilter::INFO),
+            ),
     )
     .expect("Failed to set global log subscriber");
 
