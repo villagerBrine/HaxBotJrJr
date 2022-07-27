@@ -27,6 +27,7 @@ use util::discord::PublicChannel;
 /// If a target can be pinged (ex: #general, @user), then its ping can also be parsed into `TargetObject`
 /// Note that the example pings are not what is actually being parsed, but instead their textual
 /// form, ex: <#2783764387>
+#[derive(Debug)]
 pub enum TargetObject<'a> {
     Mc(String),
     Discord(DiscordObject<'a>),
@@ -87,6 +88,7 @@ impl<'a> TargetObject<'a> {
 }
 
 /// Types of discord objects, directly corresponds to `DiscordObject`
+#[derive(Debug)]
 pub enum DiscordObjectType {
     Channel,
     Member,
@@ -94,6 +96,7 @@ pub enum DiscordObjectType {
 }
 
 /// Subset of `TargetObject`
+#[derive(Debug)]
 pub enum DiscordObject<'a> {
     Channel(PublicChannel<'a>),
     Member(Cow<'a, Member>),
@@ -186,10 +189,15 @@ pub fn extract_id_from_ping(ping: &str) -> Option<(DiscordObjectType, u64)> {
         return None;
     }
 
-    // An discord id is always 18 characters long
+    // An discord id is always 18 characters long, except for thread id, it is 19 characters long
+
     // Channel ping format: <#id>
-    let (ty, id_str) = if ping.starts_with("<#") && ping.len() == 21 {
-        (DiscordObjectType::Channel, ping.get(2..20))
+    let (ty, id_str) = if ping.starts_with("<#") {
+        if ping.len() == 21 {
+            (DiscordObjectType::Channel, ping.get(2..20))
+        } else {
+            (DiscordObjectType::Channel, ping.get(2..21))
+        }
     // User ping format: <@!id>
     } else if ping.starts_with("<@!") && ping.len() == 22 {
         (DiscordObjectType::Member, ping.get(3..21))
