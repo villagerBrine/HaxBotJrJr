@@ -663,7 +663,7 @@ pub async fn bind_discord(db: &DB, mid: MemberId, discord_new: Option<DiscordId>
 ///
 /// # Errors
 /// `DBError::linkOverride` if the given mc id is already binded to another member.
-/// `DBError::WrongMemberType` if the given member is a guild partial.
+/// `DBError::WrongMemberType` if binding wynn profile on a guild partial.
 #[instrument(skip(db))]
 pub async fn bind_wynn(db: &DB, mid: MemberId, mcid_new: Option<&str>, ign: &str) -> Result<bool> {
     if let Some(mcid_new) = mcid_new {
@@ -679,7 +679,11 @@ pub async fn bind_wynn(db: &DB, mid: MemberId, mcid_new: Option<&str>, ign: &str
         .mcid;
 
     match get_member_type(&db, mid).await? {
-        MemberType::GuildPartial => return Err(DBError::WrongMemberType(MemberType::GuildPartial).into()),
+        MemberType::GuildPartial => {
+            if mcid_new.is_some() {
+                return Err(DBError::WrongMemberType(MemberType::GuildPartial).into());
+            }
+        }
         MemberType::WynnPartial => {
             if let Some(mcid_old) = &mcid_old {
                 if mcid_new.is_none() && is_in_guild(&db, mcid_old).await? {

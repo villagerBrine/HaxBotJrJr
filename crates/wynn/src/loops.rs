@@ -254,7 +254,6 @@ async fn server_api_loop(signal: WynnSignal, client: &Client, db: &RwLock<DB>) {
                                     // Player was online previously
                                     // Update online time as the elapsed time from previous loop
                                     if elapsed > 0 {
-                                        info!(ign, world, elapsed, "player stay");
                                         events.push(WynnEvent::PlayerStay {
                                             ign: ign.to_string(),
                                             world: world.clone(),
