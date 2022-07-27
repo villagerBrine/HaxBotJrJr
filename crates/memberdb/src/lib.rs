@@ -663,7 +663,7 @@ pub async fn bind_discord(db: &DB, mid: MemberId, discord_new: Option<DiscordId>
 ///
 /// # Errors
 /// `DBError::linkOverride` if the given mc id is already binded to another member.
-/// `DBError::WrongMemberType` if binding wynn profile on a guild partial.
+/// `DBError::WrongMemberType` if the given member is a guild partial.
 #[instrument(skip(db))]
 pub async fn bind_wynn(db: &DB, mid: MemberId, mcid_new: Option<&str>, ign: &str) -> Result<bool> {
     if let Some(mcid_new) = mcid_new {
@@ -679,11 +679,7 @@ pub async fn bind_wynn(db: &DB, mid: MemberId, mcid_new: Option<&str>, ign: &str
         .mcid;
 
     match get_member_type(&db, mid).await? {
-        MemberType::GuildPartial => {
-            if mcid_new.is_some() {
-                return Err(DBError::WrongMemberType(MemberType::GuildPartial).into());
-            }
-        }
+        MemberType::GuildPartial => return Err(DBError::WrongMemberType(MemberType::GuildPartial).into()),
         MemberType::WynnPartial => {
             if let Some(mcid_old) = &mcid_old {
                 if mcid_new.is_none() && is_in_guild(&db, mcid_old).await? {
@@ -810,7 +806,23 @@ pub async fn bind_wynn_guild(
             if !status {
                 if let MemberType::GuildPartial = get_member_type(&db, mid).await? {
                     info!("Removing guild partial member because guild profile is unlinked");
-                    remove_member(&db, mid).await?;
+
+                    info!("Unbinding wynn profile");
+                    bind_wynn_unchecked(&db, mid, None).await?;
+                    link_wynn(&db, None, &mcid).await?;
+                    db.signal(DBEvent::WynnProfileUnbind {
+                        mid,
+                        before: mcid.to_string(),
+                        removed: true,
+                    });
+
+                    let (discord, _) = get_member_links(&db, mid).await?;
+                    remove_member_unchecked(&db, mid).await?;
+                    db.signal(DBEvent::MemberRemove {
+                        mid,
+                        discord_id: discord,
+                        mcid: Some(mcid.to_string()),
+                    });
                 }
             }
         }
