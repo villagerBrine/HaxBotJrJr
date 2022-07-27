@@ -10,7 +10,7 @@ use tracing::error;
 
 use memberdb::error::DBError;
 use memberdb::events::DBEvent;
-use memberdb::member::{MemberId, MemberRank, ProfileType};
+use memberdb::member::{MemberId, MemberRank, ProfileType, MemberType};
 use memberdb::table::{MemberFilter, Stat};
 use memberdb::DB;
 use msgtool::pager::Pager;
@@ -372,11 +372,11 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
 /// - __Mc account__: "m:<ign>", ex: "m:SephDark18"
 async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let (profile_type, target_arg) = arg!(ctx, msg, args,
-        ProfileType: "Partial member type not provided or is invalid, see `help addPartial` for help",
+        ProfileType: "Profile type not provided or is invalid, see `help unlink` for help",
         ..);
 
     if let ProfileType::Guild = profile_type {
-        finish!(ctx, msg, "Invalid partial member type (need to be discord or wynn)");
+        finish!(ctx, msg, "Invalid profile type (need to be discord or wynn)");
     }
 
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message guild"));
@@ -414,6 +414,13 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
         ProfileType::Wynn => {
             if old_mcid.is_none() {
                 finish!(ctx, msg, "There is no linked wynn profile for the command to unlink");
+            }
+            let member_type = {
+                let db = db.read().await;
+                ctx!(memberdb::get_member_type(&db, mid).await)?
+            };
+            if let MemberType::GuildPartial = member_type {
+                finish!(ctx, msg, "You can't unlink wynn profile of a guild partial member")
             }
 
             let result = {
