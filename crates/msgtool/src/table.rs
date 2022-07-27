@@ -1,4 +1,4 @@
-/// Utilities for displaying tables
+//! Utilities for displaying tables
 use util::some;
 
 use crate::pager::ToPage;

@@ -1,3 +1,4 @@
+//! Tools for live interactions with users via discord messages, mostly through message components
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -11,12 +12,14 @@ use serenity::model::interactions::InteractionResponseType;
 
 use crate::pager::{Pager, ToPage};
 
+/// Color styles for confirm buttons of message components
 pub enum ConfirmStyle {
     Normal,
     Important,
 }
 
 impl ConfirmStyle {
+    /// Get the color of the "yes" button
     pub fn yes(&self) -> ButtonStyle {
         match self {
             Self::Normal => ButtonStyle::Success,
@@ -24,6 +27,7 @@ impl ConfirmStyle {
         }
     }
 
+    /// Get the color of the "no" button
     pub fn no(&self) -> ButtonStyle {
         match self {
             Self::Normal => ButtonStyle::Danger,
@@ -32,6 +36,8 @@ impl ConfirmStyle {
     }
 }
 
+/// Send a message that asks the user for yes or no, and return the answer in boolean.
+/// The message is stop being observed
 pub async fn confirm(
     ctx: &Context, channel_id: ChannelId, content: &str, style: ConfirmStyle, timeout: u64, user_id: UserId,
 ) -> Result<Option<(bool, Arc<MessageComponentInteraction>)>> {

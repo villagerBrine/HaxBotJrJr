@@ -1,3 +1,4 @@
+//! Tools for conversion from string
 use std::borrow::Cow;
 
 use anyhow::{bail, Result};
@@ -10,66 +11,89 @@ use tokio::sync::RwLock;
 use memberdb::DB;
 use util::discord::PublicChannel;
 
+/// A target is a generalization of an object which the bot can act upon
+///
+/// # Text representations
+/// *Parenthesised texts are to be substituted*
+/// General form: `(hint-prefix):(name)`
+/// This is referred to as hinted target.
+///
+/// - Mc account: `m:(ign)`
+/// - Discord account: `d:(username)`
+/// - Discord role: `r:(name)`
+/// - Discord channel: `c:(name)`
+///
+/// # Pings
+/// If a target can be pinged (ex: #general, @user), then its ping can also be parsed into `TargetObject`
+/// Note that the example pings are not what is actually being parsed, but instead their textual
+/// form, ex: <#2783764387>
 pub enum TargetObject<'a> {
     Mc(String),
     Discord(DiscordObject<'a>),
 }
 
 impl<'a> TargetObject<'a> {
+    /// Parse hinted target string
     pub async fn from_hinted(
         cache_http: &'a impl CacheHttp, db: &RwLock<DB>, client: &Client, guild: &'a Guild, s: &'a str,
     ) -> Result<TargetObject<'a>> {
-        if let Some((identifier, s)) = s.split_once(':') {
-            return Self::parse(cache_http, &db, &client, &guild, identifier, s).await;
+        if let Some((prefix, name)) = s.split_once(':') {
+            return Self::parse(cache_http, &db, &client, &guild, prefix, name).await;
         }
         bail!("Invalid format for target string")
     }
 
+    /// Parse bot hinted and pinged target string
     pub async fn from_str(
         cache_http: &'a impl CacheHttp, db: &RwLock<DB>, client: &Client, guild: &'a Guild, s: &'a str,
     ) -> Result<TargetObject<'a>> {
+        // Ping parsing is prioritized
         if let Ok(d_obj) = DiscordObject::parse_ping(cache_http, &guild, &s).await {
             return Ok(Self::Discord(d_obj));
         }
         Self::from_hinted(cache_http, &db, &client, &guild, s).await
     }
 
+    /// Parse hinted target components: its prefix and target name.
     pub async fn parse(
-        cache_http: &'a impl CacheHttp, db: &RwLock<DB>, client: &Client, guild: &'a Guild, ident: &str,
-        s: &'a str,
+        cache_http: &'a impl CacheHttp, db: &RwLock<DB>, client: &Client, guild: &'a Guild, prefix: &str,
+        name: &'a str,
     ) -> Result<TargetObject<'a>> {
-        match ident {
+        match prefix {
             "m" => {
-                if !wynn::utils::is_valid_ign(s) {
+                if !wynn::utils::is_valid_ign(name) {
                     bail!("Invalid mc ign")
                 }
 
+                // Tries to get mcid from database first, if fails, then mojang api is used
                 let id = {
                     let db = db.read().await;
-                    memberdb::get_ign_mcid(&db, s).await?
+                    memberdb::get_ign_mcid(&db, name).await?
                 };
                 match id {
                     Some(id) => Ok(Self::Mc(id)),
                     None => {
-                        let id = wynn::get_ign_id(&client, s).await?;
+                        let id = wynn::get_ign_id(&client, name).await?;
                         Ok(Self::Mc(id))
                     }
                 }
             }
             _ => {
-                let d_obj = DiscordObject::parse(cache_http, &guild, ident, s).await?;
+                let d_obj = DiscordObject::parse(cache_http, &guild, prefix, name).await?;
                 Ok(Self::Discord(d_obj))
             }
         }
     }
 }
 
+/// Types of discord objects, directly corresponds to `DiscordObject`
 pub enum DiscordObjectType {
     Channel,
     Member,
     Role,
 }
 
+/// Subset of `TargetObject`
 pub enum DiscordObject<'a> {
     Channel(PublicChannel<'a>),
     Member(Cow<'a, Member>),
@@ -77,6 +101,7 @@ pub enum DiscordObject<'a> {
 }
 
 impl<'a> DiscordObject<'a> {
+    /// Parse hinted discord target string
     pub async fn from_hinted(
         cache_http: &'a impl CacheHttp, guild: &'a Guild, s: &'a str,
     ) -> Result<DiscordObject<'a>> {
@@ -86,25 +111,29 @@ impl<'a> DiscordObject<'a> {
         bail!("Invalid format for target discord string")
     }
 
+    /// Parse both hinted and pinged discord target string
     pub async fn from_str(
         cache_http: &'a impl CacheHttp, guild: &'a Guild, s: &'a str,
     ) -> Result<DiscordObject<'a>> {
+        // Ping parsing is prioritized
         if let Ok(obj) = Self::parse_ping(cache_http, &guild, s).await {
             return Ok(obj);
         }
         Self::from_hinted(cache_http, &guild, s).await
     }
 
+    /// Parse pinged discord target string
     pub async fn parse_ping(
         cache_http: &impl CacheHttp, guild: &'a Guild, s: &str,
     ) -> Result<DiscordObject<'a>> {
         let (ty, id) = util::some!(extract_id_from_ping(s), bail!("Invalid ping format"));
         match ty {
             DiscordObjectType::Member => {
+                // Tries to find member from cache, if failed, fetch it over api
                 return match guild.members.get(&UserId(id)) {
                     Some(member) => Ok(Self::Member(Cow::Borrowed(member))),
                     None => Ok(Self::Member(Cow::Owned(guild.member(&cache_http, &UserId(id)).await?))),
-                }
+                };
             }
             DiscordObjectType::Channel => {
                 let channel_result = util::discord::get_channel(&guild, id);
@@ -121,6 +150,7 @@ impl<'a> DiscordObject<'a> {
         bail!("Failed to get discord object by id")
     }
 
+    /// Parse hinted discord target components: its prefix and target name.
     pub async fn parse(
         cache_http: &'a impl CacheHttp, guild: &'a Guild, ident: &str, s: &'a str,
     ) -> Result<DiscordObject<'a>> {
@@ -147,16 +177,23 @@ impl<'a> DiscordObject<'a> {
     }
 }
 
+/// Given a discord ping string (ex: #general, @user), determine its type and extract out contained
+/// id.
+/// Note that the example pings are not what this function actually accepts, but instead their
+/// textual form, ex: <#23746372838>
 pub fn extract_id_from_ping(ping: &str) -> Option<(DiscordObjectType, u64)> {
     if !ping.starts_with("<") || !ping.ends_with(">") {
         return None;
     }
 
-    // An id is always 18 characters long
+    // An discord id is always 18 characters long
+    // Channel ping format: <#id>
     let (ty, id_str) = if ping.starts_with("<#") && ping.len() == 21 {
         (DiscordObjectType::Channel, ping.get(2..20))
+    // User ping format: <@!id>
     } else if ping.starts_with("<@!") && ping.len() == 22 {
         (DiscordObjectType::Member, ping.get(3..21))
+    // Role ping format: <@&id>
     } else if ping.starts_with("<@&") && ping.len() == 22 {
         (DiscordObjectType::Role, ping.get(3..21))
     } else {
