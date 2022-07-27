@@ -13,7 +13,7 @@ pub enum TagWrap {
 }
 
 impl Tag for TagWrap {
-    fn describe(&self) -> String {
+    fn describe(&self) -> &str {
         match self {
             Self::Channel(t) => t.describe(),
             Self::User(t) => t.describe(),

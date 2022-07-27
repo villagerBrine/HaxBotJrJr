@@ -15,7 +15,7 @@ pub const USER_TAGS: [UserTag; 2] = [UserTag::NoNickUpdate, UserTag::NoRoleUpdat
 
 pub trait Tag: Eq + Hash + FromStr + Display + Clone {
     /// Describe the tag
-    fn describe(&self) -> String;
+    fn describe(&self) -> &str;
 }
 
 /// Abstraction over a map from object to its attached tags
@@ -95,12 +95,11 @@ pub enum UserTag {
 }
 
 impl Tag for UserTag {
-    fn describe(&self) -> String {
+    fn describe(&self) -> &str {
         match self {
             Self::NoNickUpdate => "Nickname won't be automatically updated",
             Self::NoRoleUpdate => "Roles won't be automatically updated",
         }
-        .to_string()
     }
 }
 
@@ -125,11 +124,10 @@ pub enum ChannelTag {
 }
 
 impl Tag for ChannelTag {
-    fn describe(&self) -> String {
+    fn describe(&self) -> &str {
         match self {
             Self::NoTrack => "Statistics won't be tracked in this channel",
         }
-        .to_string()
     }
 }
 
@@ -147,3 +145,44 @@ impl FromStr for ChannelTag {
 }
 
 impl_debug_display!(ChannelTag);
+
+/// Tags to be attached to a text channel
+#[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq, Clone)]
+pub enum TextChannelTag {
+    GuildMemberLog,
+    GuildLevelLog,
+    XpLog,
+    OnlineLog,
+}
+
+impl Tag for TextChannelTag {
+    fn describe(&self) -> &str {
+        match self {
+            Self::GuildMemberLog => "Logs guild member join, leave, and rank / ign change",
+            Self::GuildLevelLog => "Logs guild level up",
+            Self::XpLog => "Logs guild member xp contributions",
+            Self::OnlineLog => "Logs player join / leave",
+        }
+    }
+}
+
+impl FromStr for TextChannelTag {
+    type Err = io::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "GuildMemberLog" => Self::GuildMemberLog,
+            "GuildLevelLog" => Self::GuildLevelLog,
+            "XpLog" => Self::XpLog,
+            "OnlineLog" => Self::OnlineLog,
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "Failed to convert from str to TextChannelTag",
+                ))
+            }
+        })
+    }
+}
+
+impl_debug_display!(TextChannelTag);
