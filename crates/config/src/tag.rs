@@ -41,13 +41,13 @@ impl<K: Eq + Hash + Copy + Clone, T: Tag> TagMap<K, T> {
         self.map.get(id)
     }
 
-    /// Get keys of the maps
-    pub fn keys(&self) -> Keys<'_, K, HashSet<T>> {
+    /// Get objects of the maps
+    pub fn objects(&self) -> Keys<'_, K, HashSet<T>> {
         self.map.keys()
     }
 
-    /// Get keys with given tag
-    pub fn tag_keys<'a>(&'a self, tag: &'a T) -> impl Iterator<Item = &K> + 'a {
+    /// Get objects with given tag
+    pub fn tag_objects<'a>(&'a self, tag: &'a T) -> impl Iterator<Item = &K> + 'a {
         self.map.keys().filter(|k| self.tag(k, tag))
     }
 

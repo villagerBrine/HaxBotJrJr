@@ -93,7 +93,7 @@ impl Config {
     pub async fn send(&self, cache_http: &impl CacheHttp, tag: &TextChannelTag, content: &str) -> Result<()> {
         let cache = some!(cache_http.cache(), bail!("No cache"));
         let http = cache_http.http();
-        for channel_id in self.text_channel_tags.tag_keys(tag) {
+        for channel_id in self.text_channel_tags.tag_objects(tag) {
             if let Some(Channel::Guild(channel)) = cache.channel(*channel_id) {
                 channel.say(http, content).await?;
             }

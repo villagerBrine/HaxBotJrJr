@@ -317,26 +317,26 @@ async fn list_tagged(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
         TagWrap::User(tag) => {
             {
                 let config = config.read().await;
-                for user_id in config.user_tags.tag_keys(&tag) {
+                for user_id in config.user_tags.tag_objects(&tag) {
                     content.push_str(&format!("<@!{}> ", user_id));
                 }
             }
             {
                 let config = config.read().await;
-                for role_id in config.user_role_tags.tag_keys(&tag) {
+                for role_id in config.user_role_tags.tag_objects(&tag) {
                     content.push_str(&format!("<@&{}> ", role_id));
                 }
             }
         }
         TagWrap::Channel(tag) => {
             let config = config.read().await;
-            for channel_id in config.channel_tags.tag_keys(&tag) {
+            for channel_id in config.channel_tags.tag_objects(&tag) {
                 content.push_str(&format!("<#{}> ", channel_id));
             }
         }
         TagWrap::TextChannel(tag) => {
             let config = config.read().await;
-            for channel_id in config.text_channel_tags.tag_keys(&tag) {
+            for channel_id in config.text_channel_tags.tag_objects(&tag) {
                 content.push_str(&format!("<#{}> ", channel_id));
             }
         }

@@ -100,7 +100,7 @@ pub async fn start_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Config
                 // Do not log if there are no log channels
                 {
                     let config = config.read().await;
-                    if config.text_channel_tags.tag_keys(&tag).next().is_none() {
+                    if config.text_channel_tags.tag_objects(&tag).next().is_none() {
                         continue;
                     }
                 }
