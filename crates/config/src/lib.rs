@@ -2,7 +2,6 @@
 pub mod tag;
 pub mod utils;
 
-use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::{bail, Result};
@@ -12,7 +11,7 @@ use serenity::http::CacheHttp;
 use serenity::model::channel::{Channel, GuildChannel};
 use serenity::model::guild::Member;
 use serenity::prelude::TypeMapKey;
-use tag::{ChannelTag, TagMap, UserTag};
+use tag::{ChannelTag, TagMap, TextChannelTag, UserTag};
 use tokio::sync::RwLock;
 use tracing::info;
 
@@ -24,10 +23,9 @@ use util::{read_json, some, write_json};
 pub struct Config {
     pub channel_tags: TagMap<u64, ChannelTag>,
     pub category_tags: TagMap<u64, ChannelTag>,
+    pub text_channel_tags: TagMap<u64, TextChannelTag>,
     pub user_tags: TagMap<u64, UserTag>,
     pub user_role_tags: TagMap<u64, UserTag>,
-    /// Map from log types to its log channels
-    pub log_channel_map: HashMap<String, HashSet<u64>>,
 }
 
 impl Config {
@@ -91,15 +89,13 @@ impl Config {
         self.check_memebr_tag(member, &UserTag::NoRoleUpdate)
     }
 
-    /// Send a message to all the channels of a log type
-    pub async fn send_log(&self, cache_http: &impl CacheHttp, log_type: &str, content: &str) -> Result<()> {
+    /// Send a message to all the channels with given tag
+    pub async fn send(&self, cache_http: &impl CacheHttp, tag: &TextChannelTag, content: &str) -> Result<()> {
         let cache = some!(cache_http.cache(), bail!("No cache"));
         let http = cache_http.http();
-        if let Some(channels) = self.log_channel_map.get(log_type) {
-            for channel in channels {
-                if let Some(Channel::Guild(channel)) = cache.channel(*channel) {
-                    channel.say(http, content).await?;
-                }
+        for channel_id in self.text_channel_tags.tag_keys(tag) {
+            if let Some(Channel::Guild(channel)) = cache.channel(*channel_id) {
+                channel.say(http, content).await?;
             }
         }
         Ok(())
@@ -142,9 +138,7 @@ async fn process_discord_event(config: &RwLock<Config>, event: &DiscordEvent) {
             let mut config = config.write().await;
             config.channel_tags.remove_all(&channel.id.0);
             config.category_tags.remove_all(&channel.id.0);
-            for ids in config.log_channel_map.values_mut() {
-                ids.remove(&channel.id.0);
-            }
+            config.text_channel_tags.remove_all(&channel.id.0);
         }
         DiscordEvent::RoleDelete { id, .. } => {
             info!("Discord role deleted, updating config");

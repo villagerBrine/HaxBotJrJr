@@ -11,6 +11,12 @@ use serde::{Deserialize, Serialize};
 use util::impl_debug_display;
 
 pub const CHANNEL_TAGS: [ChannelTag; 1] = [ChannelTag::NoTrack];
+pub const TEXT_CHANNEL_TAGS: [TextChannelTag; 4] = [
+    TextChannelTag::GuildMemberLog,
+    TextChannelTag::GuildLevelLog,
+    TextChannelTag::XpLog,
+    TextChannelTag::OnlineLog,
+];
 pub const USER_TAGS: [UserTag; 2] = [UserTag::NoNickUpdate, UserTag::NoRoleUpdate];
 
 pub trait Tag: Eq + Hash + FromStr + Display + Clone {

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use serenity::CacheAndHttp;
@@ -6,6 +6,7 @@ use tokio::sync::RwLock;
 use tokio::time::{self, Duration};
 use tracing::info;
 
+use config::tag::TextChannelTag;
 use config::Config;
 use event::{WynnEvent, WynnSignal};
 use util::{ctx, ok, some};
@@ -32,34 +33,29 @@ fn make_wynn_log(event: &WynnEvent) -> Option<String> {
     })
 }
 
-pub const LOG_CHANNEL_KEYS: [&str; 4] = ["guild_member", "guild_level", "xp", "online"];
+pub const LOG_CHANNEL_TAGS: [TextChannelTag; 4] = [
+    TextChannelTag::GuildMemberLog,
+    TextChannelTag::GuildLevelLog,
+    TextChannelTag::XpLog,
+    TextChannelTag::OnlineLog,
+];
 
-fn get_log_channel_key(event: &WynnEvent) -> Option<&str> {
+fn get_log_channel_tag(event: &WynnEvent) -> Option<TextChannelTag> {
     Some(match event {
         WynnEvent::MemberJoin { .. }
         | WynnEvent::MemberLeave { .. }
         | WynnEvent::MemberRankChange { .. }
-        | WynnEvent::MemberNameChange { .. } => "guild_member",
-        WynnEvent::GuildLevelUp { .. } => "guild_level",
-        WynnEvent::MemberContribute { .. } => "xp",
-        WynnEvent::PlayerJoin { .. } | WynnEvent::PlayerLeave { .. } => "online",
+        | WynnEvent::MemberNameChange { .. } => TextChannelTag::GuildMemberLog,
+        WynnEvent::GuildLevelUp { .. } => TextChannelTag::GuildLevelLog,
+        WynnEvent::MemberContribute { .. } => TextChannelTag::XpLog,
+        WynnEvent::PlayerJoin { .. } | WynnEvent::PlayerLeave { .. } => TextChannelTag::OnlineLog,
         _ => return None,
     })
 }
 
 pub async fn start_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Config>>, signal: WynnSignal) {
-    {
-        // Makes sure the log channel map entries exists
-        let mut config = config.write().await;
-        for k in LOG_CHANNEL_KEYS {
-            if !config.log_channel_map.contains_key(k) {
-                config.log_channel_map.insert(k.to_string(), HashSet::new());
-            }
-        }
-    }
-
-    let mut buffers: HashMap<&str, String> = HashMap::with_capacity(LOG_CHANNEL_KEYS.len());
-    for k in LOG_CHANNEL_KEYS {
+    let mut buffers: HashMap<&TextChannelTag, String> = HashMap::with_capacity(LOG_CHANNEL_TAGS.len());
+    for k in &LOG_CHANNEL_TAGS {
         buffers.insert(k, String::new());
     }
     let buffers = Arc::new(Mutex::new(buffers));
@@ -71,22 +67,22 @@ pub async fn start_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Config
         let mut interval = time::interval(Duration::from_secs(60));
         loop {
             interval.tick().await;
-            for key in LOG_CHANNEL_KEYS {
+            for tag in &LOG_CHANNEL_TAGS {
                 let log = {
                     let mut buffers = shared_buffers.lock().unwrap();
                     // Early return if no logs
-                    let buffer = buffers.get(key).unwrap();
+                    let buffer = buffers.get(tag).unwrap();
                     if buffer.is_empty() {
                         continue;
                     }
                     // Get buffer and replace it with an empty one
-                    let buffer = buffers.remove(key).unwrap();
-                    buffers.insert(key, String::new());
+                    let buffer = buffers.remove(tag).unwrap();
+                    buffers.insert(tag, String::new());
                     buffer
                 };
                 {
                     let config = shared_config.read().await;
-                    let _ = ctx!(config.send_log(&cache_http, key, &log).await);
+                    let _ = ctx!(config.send(&cache_http, tag, &log).await);
                 }
             }
         }
@@ -100,20 +96,19 @@ pub async fn start_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Config
                 ok!(ctx!(receiver.recv().await, "Failed to receive wynn events in log loop"), continue);
 
             for event in events.as_ref() {
-                let key = some!(get_log_channel_key(&event), continue);
+                let tag = some!(get_log_channel_tag(&event), continue);
                 // Do not log if there are no log channels
-                let is_channel_empty = {
+                {
                     let config = config.read().await;
-                    config.log_channel_map.get(key).unwrap().is_empty()
-                };
-                if is_channel_empty {
-                    continue;
+                    if config.text_channel_tags.tag_keys(&tag).next().is_none() {
+                        continue;
+                    }
                 }
 
                 let log = some!(make_wynn_log(&event), continue);
                 {
                     let mut buffers = buffers.lock().unwrap();
-                    let buffer = buffers.get_mut(key).unwrap();
+                    let buffer = buffers.get_mut(&tag).unwrap();
                     buffer.push('\n');
                     buffer.push_str(&log);
                 }

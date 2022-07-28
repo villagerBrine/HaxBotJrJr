@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use anyhow::Context as AHContext;
 use serenity::client::{Cache, Context};
 use serenity::framework::standard::macros::command;
@@ -7,10 +5,10 @@ use serenity::framework::standard::{Args, CommandResult};
 use serenity::model::channel::{GuildChannel, Message};
 use tokio::sync::RwLock;
 
-use config::tag::{Tag, CHANNEL_TAGS, USER_TAGS};
+use config::tag::{Tag, CHANNEL_TAGS, TEXT_CHANNEL_TAGS, USER_TAGS};
 use config::utils::TagWrap;
 use config::Config;
-use msgtool::parser::{DiscordObject, DiscordObjectType};
+use msgtool::parser::DiscordObject;
 use util::discord::PublicChannel;
 use util::{ok, some};
 
@@ -29,6 +27,7 @@ async fn list_tags(ctx: &Context, msg: &Message, _: Args) -> CommandResult {
 for operations on those tags, like adding/removing tags, see `help tag` for more info.",
             )
             .field("Channel", util::string::str_list_iter(CHANNEL_TAGS.iter()), true)
+            .field("Text Channel", util::string::str_list_iter(TEXT_CHANNEL_TAGS.iter()), true)
             .field("User", util::string::str_list_iter(USER_TAGS.iter()), true)
     });
     Ok(())
@@ -42,6 +41,7 @@ async fn describe_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandRe
     let content = match arg!(ctx, msg, args, TagWrap:"Invalid tag, use command `tag` to get list of tags") {
         TagWrap::User(t) => format!("User/role tag: {}", t.describe()),
         TagWrap::Channel(t) => format!("Channel/category tag: {}", t.describe()),
+        TagWrap::TextChannel(t) => format!("Text channel tag: {}", t.describe()),
     };
     finish!(ctx, msg, content);
 }
@@ -100,6 +100,10 @@ async fn add_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
                 TagWrap::Channel(tag) => {
                     let mut config = config.write().await;
                     config.channel_tags.add(&channel.id().0, tag);
+                }
+                TagWrap::TextChannel(tag) => {
+                    let mut config = config.write().await;
+                    config.text_channel_tags.add(&channel.id().0, tag);
                 }
                 _ => finish!(ctx, msg, "This tag can't be added to a channel/category"),
             }
@@ -162,6 +166,10 @@ async fn remove_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
                 TagWrap::Channel(tag) => {
                     let mut config = config.write().await;
                     config.channel_tags.remove(&channel.id().0, &tag);
+                }
+                TagWrap::TextChannel(tag) => {
+                    let mut config = config.write().await;
+                    config.text_channel_tags.remove(&channel.id().0, &tag);
                 }
                 _ => {
                     finish!(ctx, msg, "A channel/category can't possibly have this tag as it is incompatible")
@@ -257,13 +265,7 @@ async fn show_tags(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             });
         }
         DiscordObject::Channel(channel) => {
-            let channel_tags = {
-                let config = config.read().await;
-                config
-                    .channel_tags
-                    .get(&channel.id().0)
-                    .map(|tags| util::string::str_list_iter(tags.iter()))
-            };
+            let channel_tags = get_channel_tag_list(&config, &channel.id().0).await;
             match channel {
                 PublicChannel::Category(_) => {
                     send_embed!(ctx, msg, |e| {
@@ -332,137 +334,14 @@ async fn list_tagged(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
                 content.push_str(&format!("<#{}> ", channel_id));
             }
         }
-    }
-    finish!(ctx, msg, if content.is_empty() { "Empty" } else { &content });
-}
-
-#[command("log")]
-#[sub_commands(add_log_channel, remove_log_channel)]
-#[only_in(guild)]
-/// Display all log channels.
-///
-/// > **Log types and their log targets**
-/// __guild_member__ logs guild member join/leave, and their rank/name change.
-/// __guild_level__ logs guild level up.
-/// __xp__ logs guild xp contribution.
-/// __online__ logs player join/leave the wynncraft server (overall server, not worlds).
-async fn list_log_channels(ctx: &Context, msg: &Message, _: Args) -> CommandResult {
-    let config = data!(ctx, "config");
-    let mut channels = HashMap::with_capacity(crate::logging::LOG_CHANNEL_KEYS.len());
-    for key in crate::logging::LOG_CHANNEL_KEYS {
-        channels.insert(key, String::new());
-    }
-
-    {
-        let config = config.read().await;
-        for (key, ids) in config.log_channel_map.iter() {
-            if let Some(s) = channels.get_mut(key.as_str()) {
-                if ids.is_empty() {
-                    *s = "Empty".to_string()
-                } else {
-                    for id in ids {
-                        s.push_str(&format!("<#{}> ", id))
-                    }
-                }
+        TagWrap::TextChannel(tag) => {
+            let config = config.read().await;
+            for channel_id in config.text_channel_tags.tag_keys(&tag) {
+                content.push_str(&format!("<#{}> ", channel_id));
             }
         }
     }
-
-    send_embed!(ctx, msg, |e| {
-        e.title("Log channels").description(
-            "Use command `log add` and `log remove` to modify these lists. \
-If you want an explanation on log types, see `help log`",
-        );
-        for (name, value) in channels {
-            e.field(name, value, true);
-        }
-        e
-    });
-    Ok(())
-}
-
-macro_rules! prep_log_channel_cmd {
-    ($ctx:ident, $msg:ident, $args:ident) => {{
-        let log_type = arg!($ctx, $msg, $args, String: "Log type not provided, see `help log add` for help");
-        if !crate::logging::LOG_CHANNEL_KEYS.contains(&log_type.as_str()) {
-            finish!($ctx, $msg, "Invalid log type, see `help log add` for help");
-        }
-
-        let (ping_type, id) = some!(
-            msgtool::parser::extract_id_from_ping($args.rest()),
-            finish!($ctx, $msg, "Invalid channel, see `help log add` for help")
-        );
-        match ping_type {
-            DiscordObjectType::Channel => {}
-            _ => finish!($ctx, $msg, "Only channel ping is accepted"),
-        }
-
-        (log_type, id)
-    }}
-}
-
-#[command("add")]
-#[only_in(guild)]
-#[checks(STAFF)]
-#[usage("<type> <channel>")]
-#[example("xp #xp-log")]
-/// Add a channel as a log channel of specified log type.
-/// `channel` needs to be a channel ping, ex: "#guild-chat".
-///
-/// `type` can have following values:
-/// guild_member, guild_level, xp, online
-///
-/// > **Log types and their log targets**
-/// __guild_member__ logs guild member join/leave, and their rank/name change.
-/// __guild_level__ logs guild level up.
-/// __xp__ logs guild xp contribution.
-/// __online__ logs player join/leave the wynncraft server (overall server, not worlds).
-async fn add_log_channel(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let (log_type, id) = prep_log_channel_cmd!(ctx, msg, args);
-
-    let config = data!(ctx, "config");
-    {
-        let mut config = config.write().await;
-        config.log_channel_map.get_mut(&log_type).unwrap().insert(id);
-    }
-
-    finish!(ctx, msg, "Successfully added log channel");
-}
-
-#[command("remove")]
-#[only_in(guild)]
-#[checks(STAFF)]
-#[usage("<type> <channel>")]
-#[example("xp #xp-log")]
-/// Remove a channel from specified log type.
-/// `channel` needs to be a channel ping, ex: "#guild-chat".
-///
-/// `type` can have following values:
-/// guild_member, guild_level, xp, online
-///
-/// > **Log types and their log targets**
-/// __guild_member__ logs guild member join/leave, and their rank/name change.
-/// __guild_level__ logs guild level up.
-/// __xp__ logs guild xp contribution.
-/// __online__ logs player join/leave the wynncraft server (overall server, not worlds).
-async fn remove_log_channel(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let (log_type, id) = prep_log_channel_cmd!(ctx, msg, args);
-
-    let config = data!(ctx, "config");
-    let was_removed = {
-        let mut config = config.write().await;
-        config.log_channel_map.get_mut(&log_type).unwrap().remove(&id)
-    };
-
-    finish!(
-        ctx,
-        msg,
-        if was_removed {
-            "Successfully removed log channel"
-        } else {
-            "Channel isn't a log channel of specified type"
-        }
-    );
+    finish!(ctx, msg, if content.is_empty() { "Empty" } else { &content });
 }
 
 async fn get_channel_parent_tag_lists(
@@ -480,14 +359,33 @@ async fn get_channel_parent_tag_lists(
         None => None,
     };
     let parent_tags = match parent_id {
-        Some(id) => {
-            let config = config.read().await;
-            config
-                .channel_tags
-                .get(&id.0)
-                .map(|tags| util::string::str_list_iter(tags.iter()))
-        }
+        Some(id) => get_channel_tag_list(config, &id.0).await,
         None => None,
     };
     (category_tags, parent_tags)
+}
+
+async fn get_channel_tag_list(config: &RwLock<Config>, channel_id: &u64) -> Option<String> {
+    let channel_tags = {
+        let config = config.read().await;
+        config
+            .channel_tags
+            .get(&channel_id)
+            .map(|tags| util::string::str_list_iter(tags.iter()))
+    };
+    let text_channel_tags = {
+        let config = config.read().await;
+        config
+            .text_channel_tags
+            .get(&channel_id)
+            .map(|tags| util::string::str_list_iter(tags.iter()))
+    };
+
+    if channel_tags.is_some() && text_channel_tags.is_some() {
+        let mut channel_tags = channel_tags.unwrap();
+        channel_tags.push_str(", ");
+        channel_tags.push_str(&text_channel_tags.unwrap());
+        return Some(channel_tags);
+    }
+    channel_tags.or(text_channel_tags)
 }

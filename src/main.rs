@@ -47,7 +47,7 @@ struct MemberManagement;
 struct Utilities;
 
 #[group]
-#[commands(list_tags, list_log_channels)]
+#[commands(list_tags)]
 struct Configuration;
 
 #[group]

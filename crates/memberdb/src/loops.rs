@@ -242,7 +242,7 @@ pub async fn process_discord_event(
                 }
             }
 
-            if state.mute || state.deaf {
+            if !state.mute && !state.deaf {
                 info!(id = state.user_id.0, "Begin tracking for user joined voice chat");
                 let mut vt = vt.lock().await;
                 vt.track_voice(&state.user_id.0);
