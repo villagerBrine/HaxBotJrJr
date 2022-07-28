@@ -4,9 +4,10 @@ use std::borrow::Cow;
 use anyhow::{Context as AHContext, Result};
 use serenity::client::Cache;
 use serenity::http::Http;
-use serenity::model::channel::{Channel, ChannelCategory, GuildChannel};
+use serenity::model::channel::{Channel, ChannelCategory, GuildChannel, PermissionOverwriteType};
 use serenity::model::guild::{Guild, Member, Role};
 use serenity::model::id::ChannelId;
+use serenity::model::permissions::Permissions;
 
 /// The same as Guild::member_named, but if it returns None,
 /// Guild::search_members is used.
@@ -125,4 +126,25 @@ pub async fn add_role(http: &Http, role: Option<&Role>, member: &mut Member) -> 
         member.add_role(http, role.id).await.context("Failed to add role")?
     }
     Ok(())
+}
+
+/// Checks if a guild channel allows a permission.
+/// If the channel is a thread, then its parent channel is checked.
+pub fn check_channel_allow(
+    guild: &Guild, channel: &GuildChannel, kind: PermissionOverwriteType, perm: Permissions,
+) -> bool {
+    // channel is a thread, check parent channel instead
+    if channel.thread_metadata.is_some() {
+        if let Some(parent_id) = channel.parent_id {
+            if let Some(Channel::Guild(parent)) = guild.channels.get(&parent_id) {
+                return check_channel_allow(guild, &parent, kind, perm);
+            }
+        }
+    }
+    for overwrite in &channel.permission_overwrites {
+        if overwrite.kind == kind && overwrite.allow == perm {
+            return true;
+        }
+    }
+    false
 }
