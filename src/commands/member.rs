@@ -710,7 +710,7 @@ async fn stat_leaderboard(ctx: &Context, msg: &Message, mut args: Args) -> Comma
 
     let (table, header) = {
         let db = db.read().await;
-        ctx!(memberdb::table::stat_leaderboard(&ctx.cache, &db, &stat, &filter).await, 
+        ctx!(memberdb::table::stat_leaderboard(&ctx.cache, &db, &stat, &filter, true).await, 
             "Failed to get stat leader board")?
     };
     if table.len() == 0 {

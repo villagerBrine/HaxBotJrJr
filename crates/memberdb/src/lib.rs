@@ -372,10 +372,10 @@ async fn weekly_reset(db: &DB, cache: &Cache) -> Result<()> {
         .await
         .context("Failed to set guild weekly stats to 0")?;
     db.signal(DBEvent::WeeklyReset {
-        message_lb: crate::table::stat_leaderboard(cache, db, &Stat::Message(true), &None).await?,
-        voice_lb: crate::table::stat_leaderboard(cache, db, &Stat::Voice(true), &None).await?,
-        online_lb: crate::table::stat_leaderboard(cache, db, &Stat::Online(true), &None).await?,
-        xp_lb: crate::table::stat_leaderboard(cache, db, &Stat::Xp(true), &None).await?,
+        message_lb: crate::table::stat_leaderboard(cache, db, &Stat::Message(true), &None, true).await?,
+        voice_lb: crate::table::stat_leaderboard(cache, db, &Stat::Voice(true), &None, true).await?,
+        online_lb: crate::table::stat_leaderboard(cache, db, &Stat::Online(true), &None, true).await?,
+        xp_lb: crate::table::stat_leaderboard(cache, db, &Stat::Xp(true), &None, true).await?,
     });
     Ok(())
 }

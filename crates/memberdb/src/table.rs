@@ -246,7 +246,7 @@ pub async fn list_igns(db: &DB) -> Result<Vec<String>> {
 }
 
 pub async fn stat_leaderboard(
-    cache: &Cache, db: &DB, stat: &Stat, filter: &Option<MemberFilter>,
+    cache: &Cache, db: &DB, stat: &Stat, filter: &Option<MemberFilter>, no_zero: bool,
 ) -> Result<(Vec<Vec<String>>, Vec<String>)> {
     let table = stat.table();
     let column = stat.column();
@@ -264,14 +264,17 @@ pub async fn stat_leaderboard(
         None => (String::new(), String::new()),
     };
 
-    let query = format!(
+    let mut query = format!(
         "SELECT RANK() OVER(ORDER BY (SELECT {0} FROM {1} WHERE id=member.{2}) DESC) AS r,\
         discord,\
         (SELECT ign FROM wynn WHERE id=member.mcid) AS ign,\
         (SELECT {0} FROM {1} WHERE id=member.{2}) AS stat{3} FROM member \
-        WHERE member.{2} NOT NULL {4}",
+        WHERE {2} NOT NULL {4}",
         column, table, link_id, guild_rank_select, where_clause
     );
+    if no_zero {
+        query.push_str(" AND stat");
+    }
 
     let result = sqlx::query(&query)
         .map(|r: SqliteRow| {
