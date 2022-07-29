@@ -11,11 +11,12 @@ use serde::{Deserialize, Serialize};
 use util::impl_debug_display;
 
 pub const CHANNEL_TAGS: [ChannelTag; 1] = [ChannelTag::NoTrack];
-pub const TEXT_CHANNEL_TAGS: [TextChannelTag; 4] = [
+pub const TEXT_CHANNEL_TAGS: [TextChannelTag; 5] = [
     TextChannelTag::GuildMemberLog,
     TextChannelTag::GuildLevelLog,
     TextChannelTag::XpLog,
     TextChannelTag::OnlineLog,
+    TextChannelTag::Summary,
 ];
 pub const USER_TAGS: [UserTag; 2] = [UserTag::NoNickUpdate, UserTag::NoRoleUpdate];
 
@@ -169,7 +170,7 @@ impl Tag for TextChannelTag {
             Self::GuildLevelLog => "Logs guild level up",
             Self::XpLog => "Logs guild member xp contributions",
             Self::OnlineLog => "Logs player join / leave",
-            Self::Summary => "Stat leader boards are posted weekly",
+            Self::Summary => "Stat leaderboards are posted weekly",
         }
     }
 }

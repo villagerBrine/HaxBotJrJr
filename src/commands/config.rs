@@ -2,7 +2,7 @@ use anyhow::Context as AHContext;
 use serenity::client::{Cache, Context};
 use serenity::framework::standard::macros::command;
 use serenity::framework::standard::{Args, CommandResult};
-use serenity::model::channel::{GuildChannel, Message};
+use serenity::model::channel::{ChannelType, GuildChannel, Message};
 use tokio::sync::RwLock;
 
 use config::tag::{Tag, CHANNEL_TAGS, TEXT_CHANNEL_TAGS, USER_TAGS};
@@ -102,8 +102,15 @@ async fn add_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
                     config.channel_tags.add(&channel.id().0, tag);
                 }
                 TagWrap::TextChannel(tag) => {
+                    let id = match channel {
+                        PublicChannel::Guild(channel) => match channel.kind {
+                            ChannelType::Text => &channel.id.0,
+                            _ => finish!(ctx, msg, "This tag can only be added to text channels"),
+                        },
+                        _ => finish!(ctx, msg, "This tag can only be added to text channels"),
+                    };
                     let mut config = config.write().await;
-                    config.text_channel_tags.add(&channel.id().0, tag);
+                    config.text_channel_tags.add(id, tag);
                 }
                 _ => finish!(ctx, msg, "This tag can't be added to a channel/category"),
             }
