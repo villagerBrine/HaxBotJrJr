@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use anyhow::Context as AHContext;
 use serenity::client::Context;
 use serenity::framework::standard::macros::command;
@@ -20,7 +18,7 @@ use util::{ok, some, ctx};
 
 use crate::checks::{MAINSERVER_CHECK, STAFF_CHECK};
 use crate::util::db::TargetId;
-use crate::util::discord::MinimalLB;
+use crate::util::discord::{MinimalLB, MinimalMembers};
 use crate::{arg, option_arg, flag_arg, cmd_bail, data, finish, send, send_embed};
 
 #[command("profile")]
@@ -637,11 +635,13 @@ pub async fn demote_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
 }
 
 #[command("members")]
-#[usage("[filter]")]
+#[usage("[filter] [minimal]")]
 #[example("")]
+#[example("minimal")]
 #[example("Chief")]
 #[example("guild")]
 #[example("<Pilot")]
+#[example(">Strategist minimal")]
 /// List members with an optional filter.
 ///
 /// `filter` can be following values:
@@ -650,14 +650,12 @@ pub async fn demote_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
 ///
 /// Rank filters can also be written as `>Captain` to filter for all guild ranks above captain,
 /// or `<Cosmonaut` for all member ranks below cosmonaut.
+///
+/// If you use this command with "minimal" as an argument, then the table is displayed without any
+/// styling. Useful if you are viewing it on a small screen.
 async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let filter = match args.single::<String>() {
-        Ok(s) => Some(ok!(
-            MemberFilter::from_str(&s),
-            finish!(ctx, msg, "Invalid filter, see `help members` for help")
-        )),
-        Err(_) => None,
-    };
+    let filter = option_arg!(ctx, msg, args, MemberFilter: "Invalid filter, see `help members` for help");
+    let is_minimal = flag_arg!(args, "minimal");
 
     let db = data!(ctx, "db");
 
@@ -670,21 +668,34 @@ async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
     }
 
     let header = vec!["IGN".to_string(), "DISCORD".to_string(), "RANK".to_string()];
-    let mut pager = Pager::new(TableData::paginate(table, header, 10));
-    ctx!(
-        msgtool::interact::page(&ctx, msg.channel_id, &mut pager, 120).await,
-        "Error when displaying member list pages"
-    )?;
+    let table_data = TableData::paginate(table, header, 10);
+
+    if is_minimal {
+        let mut pager = Pager::new(table_data.into_iter().map(|data| {
+            MinimalMembers(data.0)
+        }).collect::<Vec<MinimalMembers>>());
+        ctx!(
+            msgtool::interact::page(&ctx, msg.channel_id, &mut pager, 120).await,
+            "Error when displaying member list pages"
+        )?;
+    } else {
+        let mut pager = Pager::new(table_data);
+        ctx!(
+            msgtool::interact::page(&ctx, msg.channel_id, &mut pager, 120).await,
+            "Error when displaying member list pages"
+        )?;
+    };
 
     Ok(())
 }
 
 #[command("lb")]
-#[usage("<stat> [filter]")]
+#[usage("<stat> [filter] [minimal]")]
 #[example("weekly_xp")]
+#[example("xp minimal")]
 #[example("message full")]
 #[example("weekly_voice >Pilot")]
-#[example("online Recruiter")]
+#[example("online Recruiter minimal")]
 /// Display leader board on specified statistic with an optional filter.
 ///
 /// `stat` can be following values: 
@@ -697,17 +708,13 @@ async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
 ///
 /// Rank filters can also be written as `>Captain` to filter for all guild ranks above captain,
 /// or `<Cosmonaut` for all member ranks below cosmonaut.
+///
+/// If you use this command with "minimal" as an argument, then the leaderboard is displayed without 
+/// any styling. Useful if you are viewing it on a small screen.
 async fn stat_leaderboard(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let stat = arg!(ctx, msg, args, Stat: "Invalid stat, see `help lb` for help");
     let filter = option_arg!(ctx, msg, args, MemberFilter: "Invalid filter, see `help lb` for help");
     let is_minimal = flag_arg!(args, "minimal");
-    // let filter = match args.single::<String>() {
-    //     Ok(s) => Some(ok!(
-    //         MemberFilter::from_str(&s),
-    //         finish!(ctx, msg, "Invalid filter, see `help lb` for help")
-    //     )),
-    //     Err(_) => None,
-    // };
 
     let db = data!(ctx, "db");
 

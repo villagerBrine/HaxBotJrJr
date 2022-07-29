@@ -90,49 +90,86 @@ pub async fn fix_discord_nick(
     Ok(discord_member)
 }
 
-/// A 2d vector that can be formatted into a minimal table via `ToPage`
+/// A 2d vector that can be formatted into a minimal lb table via `ToPage`
 pub struct MinimalLB(pub Vec<Vec<String>>);
 
 impl ToPage for MinimalLB {
     type Page = String;
 
     fn to_page(&self, page_info: Option<(usize, usize)>) -> Self::Page {
-        let mut page = self
-            .0
-            .iter()
-            .map(|row| {
-                let mut row_s = String::new();
-                for (i, s) in row.iter().enumerate() {
-                    match i {
-                        0 => row_s.push_str(s),
-                        1 => {
-                            row_s.push_str(" **");
-                            row_s.push_str(s);
-                            row_s.push_str("**");
-                        }
-                        _ => {
-                            row_s.push_str(" `");
-                            row_s.push_str(s);
-                            row_s.push('`');
-                        }
-                    }
-                }
-                row_s
-            })
-            .collect::<Vec<String>>()
-            .join("\n");
-
-        match page_info {
-            Some((_, 1)) | None => {}
-            Some((index, num)) => {
-                page.push_str("\n__");
-                page.push_str(&index.to_string());
-                page.push('/');
-                page.push_str(&num.to_string());
-                page.push_str("__");
+        make_minimal_table(&self.0, page_info, |row_s, i, s| match i {
+            0 => row_s.push_str(s),
+            1 => {
+                row_s.push_str(" **");
+                row_s.push_str(s);
+                row_s.push_str("**");
             }
-        }
-
-        page
+            _ => {
+                row_s.push_str(" `");
+                row_s.push_str(s);
+                row_s.push('`');
+            }
+        })
     }
+}
+
+/// A 2d vector that can be formatted into a minimal member list via `ToPage`
+pub struct MinimalMembers(pub Vec<Vec<String>>);
+
+impl ToPage for MinimalMembers {
+    type Page = String;
+
+    fn to_page(&self, page_info: Option<(usize, usize)>) -> Self::Page {
+        make_minimal_table(&self.0, page_info, |row_s, i, s| match i {
+            0 => push_empty_or(row_s, s),
+            1 => push_empty_or(row_s, s),
+            _ => {
+                row_s.push_str("**");
+                row_s.push_str(s);
+                row_s.push_str("**");
+            }
+        })
+    }
+}
+
+/// Push string, if it is empty, push "none"
+fn push_empty_or(row_s: &mut String, s: &String) {
+    if s.is_empty() {
+        row_s.push_str("none ")
+    } else {
+        row_s.push('`');
+        row_s.push_str(s);
+        row_s.push_str("` ");
+    }
+}
+
+/// Format a 2d vector into a minimal table
+fn make_minimal_table<F>(data: &Vec<Vec<String>>, page_info: Option<(usize, usize)>, fmt: F) -> String
+where
+    F: Fn(&mut String, usize, &String) -> (),
+{
+    let mut page = data
+        .iter()
+        .map(|row| {
+            let mut row_s = String::new();
+            for (i, s) in row.iter().enumerate() {
+                fmt(&mut row_s, i, s);
+            }
+            row_s
+        })
+        .collect::<Vec<String>>()
+        .join("\n");
+
+    match page_info {
+        Some((_, 1)) | None => {}
+        Some((index, num)) => {
+            page.push_str("\n__");
+            page.push_str(&index.to_string());
+            page.push('/');
+            page.push_str(&num.to_string());
+            page.push_str("__");
+        }
+    }
+
+    page
 }
