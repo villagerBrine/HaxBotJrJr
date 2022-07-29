@@ -32,9 +32,11 @@ pub async fn fix_discord_roles(
 
 /// Given discord nick, return custom nick within it
 pub fn extract_custom_nick(nick: &str) -> &str {
-    let nick = &nick[2..]; // nick without the rank symbol
     match nick.find(' ') {
-        Some(i) => &nick[i + 1..],
+        Some(no_rank_i) => match &nick[no_rank_i + 1..].find(' ') {
+            Some(nick_i) => &nick[nick_i + 1..],
+            None => "",
+        },
         None => "",
     }
 }
