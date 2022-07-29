@@ -114,9 +114,11 @@ async fn main() {
         .await;
 
     let data = bot_data.clone();
+    let cache = client.cache_and_http.cache.clone();
     memberdb::loops::start_loops(
         data.db,
         data.config,
+        cache,
         data.voice_tracker,
         data.wynn_signal,
         data.discord_signal,

@@ -3,7 +3,7 @@ use memberdb::discord::DiscordProfile;
 use memberdb::guild::GuildProfile;
 use memberdb::utils::Profiles;
 use memberdb::wynn::WynnProfile;
-use serenity::client::Context;
+use serenity::client::Cache;
 
 use util::some;
 
@@ -17,7 +17,7 @@ use util::some;
 ///
 /// If the member have both an ign and a discord username, then the upper part is set to the one
 /// that isn't included in the lower part, otherwise it is empty.
-pub async fn get_names(ctx: &Context, profiles: &Profiles) -> (String, String) {
+pub async fn get_names(cache: &Cache, profiles: &Profiles) -> (String, String) {
     let mut lower = "".to_string();
 
     // Push member rank, if not exist, try push guild rank
@@ -32,7 +32,7 @@ pub async fn get_names(ctx: &Context, profiles: &Profiles) -> (String, String) {
 
     // Get and format discord username
     let discord_name = match &profiles.discord {
-        Some(discord) => memberdb::utils::to_user(&ctx, discord.id)
+        Some(discord) => memberdb::utils::to_user(cache, discord.id)
             .map(|user| format!("{}#{}", user.name, user.discriminator)),
         None => None,
     };

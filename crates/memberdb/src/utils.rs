@@ -1,5 +1,5 @@
 use anyhow::{Context as AHContext, Result};
-use serenity::client::Context;
+use serenity::client::{Cache, Context};
 use serenity::model::guild::{Guild, Member as DMember};
 use serenity::model::id::UserId;
 use serenity::model::user::User;
@@ -120,9 +120,9 @@ pub fn from_user_id(id: UserId) -> Option<DiscordId> {
     i64::try_from(id.0).ok()
 }
 
-pub fn to_user(ctx: &Context, id: DiscordId) -> Option<User> {
+pub fn to_user(cache: &Cache, id: DiscordId) -> Option<User> {
     if let Some(id) = to_user_id(id) {
-        return ctx.cache.user(id);
+        return cache.user(id);
     }
     None
 }

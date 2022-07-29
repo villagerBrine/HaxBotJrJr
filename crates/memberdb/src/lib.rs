@@ -13,6 +13,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use serenity::client::Cache;
 use serenity::prelude::TypeMapKey;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{query, query_as, Pool, Sqlite, Transaction};
@@ -25,6 +26,7 @@ use crate::error::*;
 use crate::events::{DBEvent, DBSignal};
 use crate::guild::*;
 use crate::member::*;
+use crate::table::Stat;
 use crate::wynn::*;
 
 pub struct DBContainer;
@@ -353,7 +355,7 @@ pub async fn get_member_rank(db: &DB, mid: MemberId) -> Result<MemberRank> {
     Ok(MemberRank::decode(&rank)?)
 }
 
-async fn weekly_reset(db: &DB) -> Result<()> {
+async fn weekly_reset(db: &DB, cache: &Cache) -> Result<()> {
     info!("Resetting discord weekly stats");
     query!("UPDATE discord SET message_week=0,voice_week=0")
         .execute(&db.pool)
@@ -369,6 +371,12 @@ async fn weekly_reset(db: &DB) -> Result<()> {
         .execute(&db.pool)
         .await
         .context("Failed to set guild weekly stats to 0")?;
+    db.signal(DBEvent::WeeklyReset {
+        message_lb: crate::table::stat_leaderboard(cache, db, &Stat::Message(true), &None).await?,
+        voice_lb: crate::table::stat_leaderboard(cache, db, &Stat::Voice(true), &None).await?,
+        online_lb: crate::table::stat_leaderboard(cache, db, &Stat::Online(true), &None).await?,
+        xp_lb: crate::table::stat_leaderboard(cache, db, &Stat::Xp(true), &None).await?,
+    });
     Ok(())
 }
 

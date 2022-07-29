@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use serenity::client::Cache;
 use serenity::http::CacheHttp;
 use serenity::model::channel::Channel;
 use serenity::model::id::ChannelId;
@@ -19,8 +20,8 @@ use crate::voice_tracker::VoiceTracker;
 use crate::DB;
 
 pub async fn start_loops(
-    db: Arc<RwLock<DB>>, config: Arc<RwLock<Config>>, vt: Arc<Mutex<VoiceTracker>>, wynn_sig: WynnSignal,
-    dc_sig: DiscordSignal, timer_sig: TimerSignal,
+    db: Arc<RwLock<DB>>, config: Arc<RwLock<Config>>, cache: Arc<Cache>, vt: Arc<Mutex<VoiceTracker>>,
+    wynn_sig: WynnSignal, dc_sig: DiscordSignal, timer_sig: TimerSignal,
 ) {
     let shared_db = db.clone();
     tokio::spawn(async move {
@@ -76,7 +77,7 @@ pub async fn start_loops(
                 TimerEvent::Weekly => {
                     info!("Starting weekly reset");
                     let db = db.write().await;
-                    let _ = ctx!(crate::weekly_reset(&db).await, "Failed weekly reset");
+                    let _ = ctx!(crate::weekly_reset(&db, &cache).await, "Failed weekly reset");
                 }
             }
         }

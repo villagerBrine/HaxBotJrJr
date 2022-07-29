@@ -159,6 +159,7 @@ pub enum TextChannelTag {
     GuildLevelLog,
     XpLog,
     OnlineLog,
+    Summary,
 }
 
 impl Tag for TextChannelTag {
@@ -168,6 +169,7 @@ impl Tag for TextChannelTag {
             Self::GuildLevelLog => "Logs guild level up",
             Self::XpLog => "Logs guild member xp contributions",
             Self::OnlineLog => "Logs player join / leave",
+            Self::Summary => "Stat leader boards are posted weekly",
         }
     }
 }
@@ -181,6 +183,7 @@ impl FromStr for TextChannelTag {
             "GuildLevelLog" => Self::GuildLevelLog,
             "XpLog" => Self::XpLog,
             "OnlineLog" => Self::OnlineLog,
+            "Summary" => Self::Summary,
             _ => {
                 return Err(io::Error::new(
                     io::ErrorKind::Other,

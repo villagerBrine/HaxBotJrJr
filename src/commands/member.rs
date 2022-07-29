@@ -65,13 +65,13 @@ async fn display_profile(ctx: &Context, msg: &Message, args: Args) -> CommandRes
         finish!(ctx, msg, "No profiles found");
     }
 
-    let names = msgtool::profile::get_names(ctx, &profiles).await;
+    let names = msgtool::profile::get_names(&ctx.cache, &profiles).await;
 
     send_embed!(ctx, msg, |e| {
         e.author(|a| a.name(names.0)).title(names.1);
 
         if let Some(discord) = &profiles.discord {
-            if let Some(user) = memberdb::utils::to_user(&ctx, discord.id) {
+            if let Some(user) = memberdb::utils::to_user(&ctx.cache, discord.id) {
                 if let Some(url) = user.avatar_url() {
                     e.thumbnail(url);
                 }
@@ -662,7 +662,7 @@ async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
 
     let table = {
         let db = db.read().await;
-        ctx!(memberdb::table::list_members(&ctx, &db, filter).await, "Failed to get members list")?
+        ctx!(memberdb::table::list_members(&ctx.cache, &db, filter).await, "Failed to get members list")?
     };
     if table.len() == 0 {
         finish!(ctx, msg, "Found 0 member");
@@ -710,7 +710,7 @@ async fn stat_leaderboard(ctx: &Context, msg: &Message, mut args: Args) -> Comma
 
     let (table, header) = {
         let db = db.read().await;
-        ctx!(memberdb::table::stat_leaderboard(&ctx, &db, &stat, &filter).await, 
+        ctx!(memberdb::table::stat_leaderboard(&ctx.cache, &db, &stat, &filter).await, 
             "Failed to get stat leader board")?
     };
     if table.len() == 0 {
@@ -765,7 +765,7 @@ async fn display_member_info(ctx: &Context, msg: &Message, args: Args) -> Comman
         }
     }
     if let Some(id) = member.discord {
-        let user = some!(memberdb::utils::to_user(&ctx, id), cmd_bail!("Failed to get discord user"));
+        let user = some!(memberdb::utils::to_user(&ctx.cache, id), cmd_bail!("Failed to get discord user"));
         content.push_str(&format!("\n**Discord** {}#{} `{}`", user.name, user.discriminator, id));
     }
 

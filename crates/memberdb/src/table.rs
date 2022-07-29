@@ -3,7 +3,7 @@ use std::io;
 use std::str::FromStr;
 
 use anyhow::{bail, Result};
-use serenity::client::Context;
+use serenity::client::Cache;
 use sqlx::sqlite::SqliteRow;
 use sqlx::Row;
 use util::some;
@@ -210,7 +210,7 @@ rank,discord,\
 
 const M_ORDER: &str = "ORDER BY ign NULLS LAST";
 
-pub async fn list_members(ctx: &Context, db: &DB, filter: Option<MemberFilter>) -> Result<Vec<Vec<String>>> {
+pub async fn list_members(cache: &Cache, db: &DB, filter: Option<MemberFilter>) -> Result<Vec<Vec<String>>> {
     Ok(sqlx::query(&match filter {
         Some(filter) => match filter.where_clause() {
             Some(clause) => match filter.guild_rank_select() {
@@ -224,7 +224,7 @@ pub async fn list_members(ctx: &Context, db: &DB, filter: Option<MemberFilter>) 
     .map(|r: SqliteRow| {
         vec![
             some!(r.get("ign"), "".to_string()),
-            match r.get::<Option<i64>, &str>("discord").map(|id| crate::utils::to_user(ctx, id)) {
+            match r.get::<Option<i64>, &str>("discord").map(|id| crate::utils::to_user(cache, id)) {
                 Some(Some(u)) => format!("{}#{}", u.name, u.discriminator),
                 _ => String::new(),
             },
@@ -246,7 +246,7 @@ pub async fn list_igns(db: &DB) -> Result<Vec<String>> {
 }
 
 pub async fn stat_leaderboard(
-    ctx: &Context, db: &DB, stat: &Stat, filter: &Option<MemberFilter>,
+    cache: &Cache, db: &DB, stat: &Stat, filter: &Option<MemberFilter>,
 ) -> Result<(Vec<Vec<String>>, Vec<String>)> {
     let table = stat.table();
     let column = stat.column();
@@ -278,7 +278,7 @@ pub async fn stat_leaderboard(
             let name = match r.get("ign") {
                 Some(ign) => ign,
                 None => {
-                    match r.get::<Option<i64>, &str>("discord").map(|id| crate::utils::to_user(ctx, id)) {
+                    match r.get::<Option<i64>, &str>("discord").map(|id| crate::utils::to_user(cache, id)) {
                         Some(Some(u)) => format!("{}#{}", u.name, u.discriminator),
                         _ => String::new(),
                     }

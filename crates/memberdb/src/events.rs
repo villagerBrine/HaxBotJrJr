@@ -63,6 +63,12 @@ pub enum DBEvent {
         before: DiscordId,
         removed: bool,
     },
+    WeeklyReset {
+        message_lb: (Vec<Vec<String>>, Vec<String>),
+        voice_lb: (Vec<Vec<String>>, Vec<String>),
+        online_lb: (Vec<Vec<String>>, Vec<String>),
+        xp_lb: (Vec<Vec<String>>, Vec<String>),
+    },
 }
 
 signal!(DBSignal, DBRecv, DBEvent);
