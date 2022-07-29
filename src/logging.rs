@@ -31,7 +31,7 @@ fn make_wynn_log(event: &WynnEvent) -> Option<String> {
             format!("**{}** changed their name to **{}**", old_name, new_name)
         }
         WynnEvent::GuildLevelUp { level } => format!("**Guild leveled up to** __{}__", level),
-        WynnEvent::PlayerJoin { ign, world } => format!("**{}** joined __WC{}__", ign, world),
+        WynnEvent::PlayerJoin { ign, world } => format!("**{}** joined __{}__", ign, world),
         WynnEvent::PlayerLeave { ign } => format!("**{}** logged off", ign),
         _ => return None,
     })
