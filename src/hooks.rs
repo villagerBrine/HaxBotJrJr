@@ -13,7 +13,11 @@ pub async fn before(ctx: &Context, msg: &Message, _: &str) -> bool {
     if let Channel::Guild(channel) = channel {
         let guild = some!(msg.guild(&ctx), return false);
         let kind = PermissionOverwriteType::Member(ctx.cache.current_user_id());
-        return util::discord::check_channel_allow(&guild, &channel, kind, Permissions::SEND_MESSAGES);
+        let allow = util::discord::check_channel_allow(&guild, &channel, kind, Permissions::SEND_MESSAGES);
+        if allow {
+            info!("Invoking command '{}' by user '{}' in '{}'", msg.content, msg.author.name, channel);
+        }
+        return allow;
     }
 
     info!("Invoking command '{}' by user '{}' in '{}'", msg.content, msg.author.name, channel);

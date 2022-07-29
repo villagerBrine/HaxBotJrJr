@@ -35,7 +35,7 @@ pub async fn fix_discord_roles(
 pub fn extract_custom_nick(nick: &str) -> &str {
     match nick.find(' ') {
         Some(no_rank_i) => match &nick[no_rank_i + 1..].find(' ') {
-            Some(nick_i) => &nick[nick_i + 1..],
+            Some(nick_i) => &nick[no_rank_i + nick_i + 2..],
             None => "",
         },
         None => "",
@@ -90,6 +90,7 @@ pub async fn fix_discord_nick(
     Ok(discord_member)
 }
 
+/// A 2d vector that can be formatted into a minimal table via `ToPage`
 pub struct MinimalLB(pub Vec<Vec<String>>);
 
 impl ToPage for MinimalLB {

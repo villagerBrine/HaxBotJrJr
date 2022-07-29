@@ -83,7 +83,7 @@ macro_rules! data {
 }
 
 #[macro_export]
-/// Parse command arg(s)
+/// Parse and consume command arg(s) in order
 macro_rules! arg {
     ($ctx:ident, $msg:ident, $args:ident, $type:ty:$err:literal) => {
         util::ok!($args.single_quoted::<$type>(), finish!($ctx, $msg, $err))
@@ -98,6 +98,7 @@ macro_rules! arg {
 }
 
 #[macro_export]
+/// Parse and consume optional arg(s)
 macro_rules! option_arg {
     ($ctx:ident, $msg:ident, $args:ident, $type:ty:$err:literal) => {
         match $args.find::<$type>() {
@@ -112,6 +113,7 @@ macro_rules! option_arg {
 }
 
 #[macro_export]
+/// Find if raw argument(s) exists
 macro_rules! flag_arg {
     ($args:ident, $flag:literal) => {
         $args.raw_quoted().collect::<Vec<&str>>().contains(&$flag)
