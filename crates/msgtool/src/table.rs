@@ -103,7 +103,7 @@ fn make_divider(left: char, hori: char, mid: char, right: char, max_widths: &Vec
 }
 
 /// Create a page index indicator
-fn make_page_indicator(page_index: usize, page_num: usize) -> String {
+pub fn make_page_indicator(page_index: usize, page_num: usize) -> String {
     if page_index == 1 && page_num == 1 {
         return BULLET_FULL.to_string();
     }
@@ -120,7 +120,7 @@ fn make_page_indicator(page_index: usize, page_num: usize) -> String {
 
 /// Data needed to create a table.
 /// Implements `ToPage` so it can be used with `Pager`
-pub struct TableData(Vec<Vec<String>>);
+pub struct TableData(pub Vec<Vec<String>>);
 
 impl TableData {
     /// Given a 2d vec of string and split it into chunks, with an optional header row added to each.

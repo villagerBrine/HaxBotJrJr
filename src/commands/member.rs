@@ -20,7 +20,8 @@ use util::{ok, some, ctx};
 
 use crate::checks::{MAINSERVER_CHECK, STAFF_CHECK};
 use crate::util::db::TargetId;
-use crate::{arg, cmd_bail, data, finish, send, send_embed};
+use crate::util::discord::MinimalLB;
+use crate::{arg, option_arg, flag_arg, cmd_bail, data, finish, send, send_embed};
 
 #[command("profile")]
 #[only_in(guild)]
@@ -698,13 +699,15 @@ async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
 /// or `<Cosmonaut` for all member ranks below cosmonaut.
 async fn stat_leaderboard(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let stat = arg!(ctx, msg, args, Stat: "Invalid stat, see `help lb` for help");
-    let filter = match args.single::<String>() {
-        Ok(s) => Some(ok!(
-            MemberFilter::from_str(&s),
-            finish!(ctx, msg, "Invalid filter, see `help lb` for help")
-        )),
-        Err(_) => None,
-    };
+    let filter = option_arg!(ctx, msg, args, MemberFilter: "Invalid filter, see `help lb` for help");
+    let is_minimal = flag_arg!(args, "minimal");
+    // let filter = match args.single::<String>() {
+    //     Ok(s) => Some(ok!(
+    //         MemberFilter::from_str(&s),
+    //         finish!(ctx, msg, "Invalid filter, see `help lb` for help")
+    //     )),
+    //     Err(_) => None,
+    // };
 
     let db = data!(ctx, "db");
 
@@ -717,11 +720,22 @@ async fn stat_leaderboard(ctx: &Context, msg: &Message, mut args: Args) -> Comma
         finish!(ctx, msg, "leader board empty");
     }
 
-    let mut pager = Pager::new(TableData::paginate(table, header, 10));
-    ctx!(
-        msgtool::interact::page(&ctx, msg.channel_id, &mut pager, 120).await,
-        "Error when displaying stat leader board pages"
-    )?;
+    let table_data = TableData::paginate(table, header, 10);
+    if is_minimal {
+        let mut pager = Pager::new(table_data.into_iter().map(|data| {
+            MinimalLB(data.0)
+        }).collect::<Vec<MinimalLB>>());
+        ctx!(
+            msgtool::interact::page(&ctx, msg.channel_id, &mut pager, 120).await,
+            "Error when displaying stat leader board pages"
+        )?;
+    } else {
+        let mut pager = Pager::new(table_data);
+        ctx!(
+            msgtool::interact::page(&ctx, msg.channel_id, &mut pager, 120).await,
+            "Error when displaying stat leader board pages"
+        )?;
+    };
 
     Ok(())
 }

@@ -98,6 +98,31 @@ macro_rules! arg {
 }
 
 #[macro_export]
+macro_rules! option_arg {
+    ($ctx:ident, $msg:ident, $args:ident, $type:ty:$err:literal) => {
+        match $args.find::<$type>() {
+            Ok(v) => Some(v),
+            Err(serenity::framework::standard::ArgError::Eos) => None,
+            _ => finish!($ctx, $msg, $err)
+        }
+    };
+    ($ctx:ident, $msg:ident, $args:ident, $($type:ty:$err:literal),+) => {
+        ($(option_arg!($ctx, $msg, $args, $type:$err),)+)
+    };
+}
+
+#[macro_export]
+macro_rules! flag_arg {
+    ($args:ident, $flag:literal) => {
+        $args.raw_quoted().collect::<Vec<&str>>().contains(&$flag)
+    };
+    ($args:ident, $($flag:literal),+) => {{
+        let args = $args.raw_quoted().collect::<Vec<&str>>();
+        ($(args.contains(&$flag),)+)
+    }};
+}
+
+#[macro_export]
 /// Send an embed
 macro_rules! send_embed {
     ($ctx:ident, $msg:ident, $embed_builder:expr) => {

@@ -5,6 +5,7 @@ use tokio::sync::RwLock;
 
 use memberdb::member::{MemberId, MemberRank};
 use memberdb::DB;
+use msgtool::pager::ToPage;
 use util::ctx;
 
 /// Update discord member's role to match up with their rank
@@ -87,4 +88,50 @@ pub async fn fix_discord_nick(
     let nick = format!("{} {} {}", rank.get_symbol(), name, custom_nick);
     let discord_member = discord_member.edit(&http, |e| e.nickname(nick)).await?;
     Ok(discord_member)
+}
+
+pub struct MinimalLB(pub Vec<Vec<String>>);
+
+impl ToPage for MinimalLB {
+    type Page = String;
+
+    fn to_page(&self, page_info: Option<(usize, usize)>) -> Self::Page {
+        let mut page = self
+            .0
+            .iter()
+            .map(|row| {
+                let mut row_s = String::new();
+                for (i, s) in row.iter().enumerate() {
+                    match i {
+                        0 => row_s.push_str(s),
+                        1 => {
+                            row_s.push_str(" **");
+                            row_s.push_str(s);
+                            row_s.push_str("**");
+                        }
+                        _ => {
+                            row_s.push_str(" `");
+                            row_s.push_str(s);
+                            row_s.push('`');
+                        }
+                    }
+                }
+                row_s
+            })
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        match page_info {
+            Some((_, 1)) | None => {}
+            Some((index, num)) => {
+                page.push_str("\n__");
+                page.push_str(&index.to_string());
+                page.push('/');
+                page.push_str(&num.to_string());
+                page.push_str("__");
+            }
+        }
+
+        page
+    }
 }
