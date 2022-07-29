@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use anyhow::Result;
+use chrono::offset::Utc;
 use serenity::CacheAndHttp;
 use tokio::sync::RwLock;
 use tokio::time::{self, Duration};
@@ -9,6 +11,8 @@ use tracing::info;
 use config::tag::TextChannelTag;
 use config::Config;
 use event::{WynnEvent, WynnSignal};
+use memberdb::events::DBEvent;
+use memberdb::DB;
 use util::{ctx, ok, some};
 
 fn make_wynn_log(event: &WynnEvent) -> Option<String> {
@@ -53,7 +57,7 @@ fn get_log_channel_tag(event: &WynnEvent) -> Option<TextChannelTag> {
     })
 }
 
-pub async fn start_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Config>>, signal: WynnSignal) {
+pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Config>>, signal: WynnSignal) {
     let mut buffers: HashMap<&TextChannelTag, String> = HashMap::with_capacity(LOG_CHANNEL_TAGS.len());
     for k in &LOG_CHANNEL_TAGS {
         buffers.insert(k, String::new());
@@ -115,4 +119,81 @@ pub async fn start_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Config
             }
         }
     });
+}
+
+const SUMMARY_TABLE_LEN: usize = 30;
+
+macro_rules! send_to_summary {
+    ($cache_http:expr, $config:ident, $msg:expr) => {
+        let config = $config.read().await;
+        ok!(ctx!(config.send($cache_http, &TextChannelTag::Summary, $msg).await), continue);
+    };
+}
+
+pub async fn start_summary_loop(
+    cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Config>>, db: Arc<RwLock<DB>>,
+) {
+    tokio::spawn(async move {
+        info!("Starting weekly summary loop");
+        let mut receiver = {
+            let db = db.read().await;
+            db.signal.connect()
+        };
+        loop {
+            let event =
+                ok!(ctx!(receiver.recv().await, "Failed to receive db event in summary loop"), continue);
+
+            if let DBEvent::WeeklyReset { message_lb, voice_lb, online_lb, xp_lb } = event.as_ref() {
+                // Do not send summary if there are no channels to send
+                {
+                    let config = config.read().await;
+                    if config.text_channel_tags.tag_objects(&TextChannelTag::Summary).next().is_none() {
+                        continue;
+                    }
+                }
+
+                let now = Utc::now().format("%Y %b %d");
+                let msg = format!("> **Weekly summary for {}**\n\n__Weekly message__", now);
+                send_to_summary!(&cache_http, config, &msg);
+
+                ok!(send_summary(&cache_http, &config, &message_lb.0).await, continue);
+                send_to_summary!(&cache_http, config, "__Weekly voice time__");
+                ok!(send_summary(&cache_http, &config, &voice_lb.0).await, continue);
+                send_to_summary!(&cache_http, config, "__Weekly online time__");
+                ok!(send_summary(&cache_http, &config, &online_lb.0).await, continue);
+                send_to_summary!(&cache_http, config, "__Weekly xp contribution__");
+                ok!(send_summary(&cache_http, &config, &xp_lb.0).await, continue);
+            }
+        }
+    });
+}
+
+async fn send_summary(
+    cache_http: &CacheAndHttp, config: &RwLock<Config>, lb: &Vec<Vec<String>>,
+) -> Result<()> {
+    if lb.len() == 0 {
+        let config = config.read().await;
+        ctx!(
+            config
+                .send(&cache_http, &TextChannelTag::Summary, "```\nEmpty leaderboard\n```",)
+                .await
+        )?;
+    }
+
+    let max_widths = msgtool::table::calc_cols_max_width(lb);
+    let tables = lb.chunks(SUMMARY_TABLE_LEN).map(|chunk| {
+        let mut table = String::from("```\n");
+        for row in chunk.iter().map(|row| msgtool::table::format_row(row, &max_widths)) {
+            table.push_str(&row);
+        }
+        table.push_str("```");
+        table
+    });
+    {
+        let config = config.read().await;
+        for table in tables {
+            ctx!(config.send(&cache_http, &TextChannelTag::Summary, &table,).await)?;
+        }
+    }
+    Ok(())
 }

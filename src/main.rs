@@ -106,7 +106,11 @@ async fn main() {
 
     let data = bot_data.clone();
     let cache_http = client.cache_and_http.clone();
-    haxbotjr::logging::start_loop(cache_http, data.config, data.wynn_signal).await;
+    haxbotjr::logging::start_log_loop(cache_http, data.config, data.wynn_signal).await;
+
+    let data = bot_data.clone();
+    let cache_http = client.cache_and_http.clone();
+    haxbotjr::logging::start_summary_loop(cache_http, data.config, data.db).await;
 
     let data = bot_data.clone();
     let cache_http = client.cache_and_http.clone();

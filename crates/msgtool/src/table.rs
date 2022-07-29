@@ -21,15 +21,7 @@ const BULLET_FULL: char = '●';
 /// Format a 2d vec of strings into a table, and a page index indicator if `page_info` is provided.
 /// `page_info` is a tuple of current page index and total number of pages.
 pub fn format_table(table: &Vec<Vec<String>>, page_info: Option<(usize, usize)>) -> String {
-    // Iterate over all columns and find the max item length for each of them
-    let mut max_widths = Vec::new();
-    for col_i in 0..table.get(0).unwrap().len() {
-        let mut max_width = 0;
-        for row in table {
-            max_width = std::cmp::max(max_width, row.get(col_i).unwrap().len());
-        }
-        max_widths.push(max_width);
-    }
+    let max_widths = calc_cols_max_width(table);
 
     // Initialize the table string with the top box edge
     let mut s = make_divider(BOX_CORNER_TL, BOX_HORIZONTAL, BOX_T_DOWN, BOX_CORNER_TR, &max_widths);
@@ -61,9 +53,26 @@ pub fn format_table(table: &Vec<Vec<String>>, page_info: Option<(usize, usize)>)
     s
 }
 
+/// Iterate over all tablecolumns and find the max item length for each of them
+pub fn calc_cols_max_width(table: &Vec<Vec<String>>) -> Vec<usize> {
+    if table.len() == 0 {
+        return Vec::new();
+    }
+
+    let mut max_widths = Vec::new();
+    for col_i in 0..table.get(0).unwrap().len() {
+        let mut max_width = 0;
+        for row in table {
+            max_width = std::cmp::max(max_width, row.get(col_i).unwrap().len());
+        }
+        max_widths.push(max_width);
+    }
+    max_widths
+}
+
 /// Format a list of strings into a table row, padded with space based on max width of each
 /// collumns
-fn format_row(row: &Vec<String>, max_widths: &Vec<usize>) -> String {
+pub fn format_row(row: &Vec<String>, max_widths: &Vec<usize>) -> String {
     let mut s = "\n".to_string();
     s.push(BOX_VERTICAL);
 
@@ -114,7 +123,7 @@ fn make_page_indicator(page_index: usize, page_num: usize) -> String {
 pub struct TableData(Vec<Vec<String>>);
 
 impl TableData {
-    /// Given a 2d vec of string and split it into chunks, with a header row added to each.
+    /// Given a 2d vec of string and split it into chunks, with an optional header row added to each.
     pub fn paginate(mut data: Vec<Vec<String>>, header: Vec<String>, len: usize) -> Vec<TableData> {
         // Check if the vec is too short to be chunked
         if data.len() <= len {

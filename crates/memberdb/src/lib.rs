@@ -356,6 +356,11 @@ pub async fn get_member_rank(db: &DB, mid: MemberId) -> Result<MemberRank> {
 }
 
 async fn weekly_reset(db: &DB, cache: &Cache) -> Result<()> {
+    let message_lb = crate::table::stat_leaderboard(cache, db, &Stat::Message(true), &None, true).await?;
+    let voice_lb = crate::table::stat_leaderboard(cache, db, &Stat::Voice(true), &None, true).await?;
+    let online_lb = crate::table::stat_leaderboard(cache, db, &Stat::Online(true), &None, true).await?;
+    let xp_lb = crate::table::stat_leaderboard(cache, db, &Stat::Xp(true), &None, true).await?;
+
     info!("Resetting discord weekly stats");
     query!("UPDATE discord SET message_week=0,voice_week=0")
         .execute(&db.pool)
@@ -371,12 +376,8 @@ async fn weekly_reset(db: &DB, cache: &Cache) -> Result<()> {
         .execute(&db.pool)
         .await
         .context("Failed to set guild weekly stats to 0")?;
-    db.signal(DBEvent::WeeklyReset {
-        message_lb: crate::table::stat_leaderboard(cache, db, &Stat::Message(true), &None, true).await?,
-        voice_lb: crate::table::stat_leaderboard(cache, db, &Stat::Voice(true), &None, true).await?,
-        online_lb: crate::table::stat_leaderboard(cache, db, &Stat::Online(true), &None, true).await?,
-        xp_lb: crate::table::stat_leaderboard(cache, db, &Stat::Xp(true), &None, true).await?,
-    });
+
+    db.signal(DBEvent::WeeklyReset { message_lb, voice_lb, online_lb, xp_lb });
     Ok(())
 }
 
