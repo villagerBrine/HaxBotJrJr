@@ -204,6 +204,9 @@ pub fn extract_id_from_ping(ping: &str) -> Option<(DiscordObjectType, u64)> {
     // Role ping format: <@&id>
     } else if ping.starts_with("<@&") && ping.len() == 22 {
         (DiscordObjectType::Role, ping.get(3..21))
+    // ALternative user ping format: <@id>
+    } else if ping.starts_with("<@") && ping.len() == 21 {
+        (DiscordObjectType::Member, ping.get(2..20))
     } else {
         return None;
     };
