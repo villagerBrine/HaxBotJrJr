@@ -22,7 +22,7 @@ pub async fn start_loop(signal: TimerSignal) {
             let until_midnight = (now + Duration::days(1)).date().and_hms(0, 0, 0) - now;
             let days_util_sunday = now.date().weekday().num_days_from_sunday();
             let days_util_sunday = i64::try_from(days_util_sunday).expect("Failed to convert u64 to i64");
-            let until_sunday = until_midnight + Duration::days(days_util_sunday - 1);
+            let until_sunday = until_midnight + Duration::days(6 - days_util_sunday);
             let until_sunday = until_sunday
                 .to_std()
                 .expect("Failed to convert chrono::Duration to std Duration");
