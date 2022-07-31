@@ -2,6 +2,7 @@ use std::env;
 
 use serenity::framework::standard::macros::group;
 use serenity::http::Http;
+use tokio::time::{self, Duration};
 use tracing::{error, info};
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
@@ -67,12 +68,14 @@ async fn main() {
             .with(
                 fmt::Layer::default()
                     .with_ansi(false)
+                    .with_timer(fmt::time::UtcTime::rfc_3339())
                     .with_writer(file_writer)
                     .with_filter(LevelFilter::INFO),
             )
             .with(
                 fmt::Layer::default()
                     .with_ansi(true)
+                    .with_timer(fmt::time::UtcTime::rfc_3339())
                     .with_writer(std::io::stdout)
                     .with_filter(LevelFilter::INFO),
             ),
@@ -136,13 +139,26 @@ async fn main() {
     let data = bot_data.clone();
     wynn::loops::start_loops(data.wynn_signal, data.reqwest_client, data.wynn_cache, data.db).await;
 
+    let data = bot_data.clone();
+    tokio::spawn(async move {
+        info!("Starting periodic state saving loop");
+        let mut interval = time::interval(Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            data.wynn_cache.store().await;
+            data.config.read().await.store("./config.json");
+        }
+    });
+
     let shard_manager = client.shard_manager.clone();
     tokio::spawn(async move {
         info!("Starting ctrl+c handler");
         tokio::signal::ctrl_c().await.expect("Could not register ctrl+c handler");
 
         // shutdown codes
+        info!("Saving api cache files");
         bot_data.wynn_cache.store().await;
+        info!("Saving config file");
         bot_data.config.read().await.store("./config.json");
         shard_manager.lock().await.shutdown_all().await;
     });

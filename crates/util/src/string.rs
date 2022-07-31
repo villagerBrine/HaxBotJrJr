@@ -108,10 +108,10 @@ macro_rules! write_json {
     ($path:expr, $data:expr, $ctx:expr) => {
         match serde_json::to_string($data) {
             Ok(s) => match std::fs::write($path, s) {
-                Ok(_) => tracing::info!("Saved {} cache to {}", $ctx, $path),
-                Err(why) => tracing::error!("Failed to save {} cache to {}: {}", $ctx, $path, why),
+                Ok(_) => {}
+                Err(why) => tracing::error!("Failed to save {} to {}: {}", $ctx, $path, why),
             },
-            Err(why) => tracing::error!("Failed to covert {} cache to string: {}", $ctx, why),
+            Err(why) => tracing::error!("Failed to covert {} to string: {}", $ctx, why),
         }
     };
 }

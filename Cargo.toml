@@ -21,7 +21,7 @@ config = {path = "./crates/config"}
 
 [dependencies.tracing-subscriber]
 version = "0.3.14"
-features = ["env-filter"]
+features = ["env-filter", "time"]
 
 [dependencies.reqwest]
 version = "0.11"
