@@ -4,8 +4,9 @@ use std::time::Duration;
 
 use anyhow::Result;
 use serenity::builder::{CreateActionRow, CreateButton, CreateComponents};
-use serenity::client::Context;
+use serenity::client::bridge::gateway::ShardMessenger;
 use serenity::futures::StreamExt;
+use serenity::http::{CacheHttp, Http};
 use serenity::model::id::{ChannelId, UserId};
 use serenity::model::interactions::message_component::{ButtonStyle, MessageComponentInteraction};
 use serenity::model::interactions::InteractionResponseType;
@@ -37,12 +38,15 @@ impl ConfirmStyle {
 }
 
 /// Send a message that asks the user for yes or no, and return the answer in boolean.
-/// The message is stop being observed
-pub async fn confirm(
-    ctx: &Context, channel_id: ChannelId, content: &str, style: ConfirmStyle, timeout: u64, user_id: UserId,
-) -> Result<Option<(bool, Arc<MessageComponentInteraction>)>> {
+/// The message is stop being observed after `timeout` (in seconds) is elapsed.
+pub async fn confirm<C>(
+    ctx: &C, channel_id: &ChannelId, content: &str, style: &ConfirmStyle, timeout: u64, user_id: UserId,
+) -> Result<Option<(bool, Arc<MessageComponentInteraction>)>>
+where
+    C: AsRef<Http> + AsRef<ShardMessenger> + CacheHttp,
+{
     let m = channel_id
-        .send_message(&ctx, |m| {
+        .send_message(ctx, |m| {
             m.content(content).components(|c| {
                 c.create_action_row(|ar| {
                     let mut yes = CreateButton::default();
@@ -60,13 +64,13 @@ pub async fn confirm(
         .await?;
 
     let ci = match m
-        .await_component_interaction(&ctx)
+        .await_component_interaction(ctx)
         .timeout(Duration::from_secs(timeout))
         .author_id(user_id)
         .await
     {
         Some(ci) => {
-            ci.create_interaction_response(&ctx, |r| {
+            ci.create_interaction_response(ctx, |r| {
                 r.kind(InteractionResponseType::UpdateMessage)
                     .interaction_response_data(|d| d.set_components(CreateComponents::default()))
             })
@@ -74,7 +78,7 @@ pub async fn confirm(
             ci
         }
         None => {
-            m.reply(&ctx, "Timed out").await?;
+            m.reply(ctx, "Timed out").await?;
             return Ok(None);
         }
     };
@@ -83,65 +87,65 @@ pub async fn confirm(
     Ok(Some((choice, ci)))
 }
 
-pub async fn page<D>(
-    ctx: &Context, channel_id: ChannelId, pager: &mut Pager<D, String>, timeout: u64,
+/// Send a navigable paged message.
+/// The message is stop being observed after `timeout` (in seconds) is elapsed.
+pub async fn page<C, D>(
+    ctx: &C, channel_id: &ChannelId, pager: &mut Pager<D, String>, timeout: u64,
 ) -> Result<()>
 where
+    C: AsRef<Http> + AsRef<ShardMessenger> + CacheHttp,
     D: ToPage<Page = String>,
 {
     let content = pager.get_page();
     if pager.len() == 1 {
-        channel_id.say(&ctx, content).await?;
+        channel_id.say(ctx, content).await?;
         return Ok(());
     }
     let msg = channel_id
-        .send_message(&ctx, |m| {
+        .send_message(ctx, |m| {
             m.content(content)
                 .components(|c| c.create_action_row(|ar| create_page_buttons(ar, 0, 2)))
         })
         .await?;
 
     let mut cib = msg
-        .await_component_interactions(&ctx)
+        .await_component_interactions(ctx)
         .timeout(Duration::from_secs(timeout))
         .build();
     while let Some(mci) = cib.next().await {
         match mci.data.custom_id.as_str() {
             "FIRST" => {
                 pager.first();
-                update_page_message(mci, &ctx, &pager).await?;
+                update_page_message(mci, ctx, pager).await?;
             }
             "PREV" => {
                 pager.prev();
-                update_page_message(mci, &ctx, &pager).await?;
+                update_page_message(mci, ctx, pager).await?;
             }
             "NEXT" => {
                 pager.next();
-                update_page_message(mci, &ctx, &pager).await?;
+                update_page_message(mci, ctx, pager).await?;
             }
             "LAST" => {
                 pager.last();
-                update_page_message(mci, &ctx, &pager).await?;
+                update_page_message(mci, ctx, pager).await?;
             }
             _ => {}
         }
     }
 
-    // msg.edit(&ctx, |m| {
-    //     m.set_components(CreateComponents::default())
-    // }).await?;
-
     Ok(())
 }
 
+/// Updates paged message
 async fn update_page_message<D>(
-    mci: Arc<MessageComponentInteraction>, ctx: &Context, pager: &Pager<D, String>,
+    mci: Arc<MessageComponentInteraction>, http: &impl AsRef<Http>, pager: &Pager<D, String>,
 ) -> Result<()>
 where
     D: ToPage<Page = String>,
 {
     Ok(mci
-        .create_interaction_response(&ctx, |r| {
+        .create_interaction_response(http, |r| {
             r.kind(InteractionResponseType::UpdateMessage).interaction_response_data(|d| {
                 d.content(pager.get_page()).components(|c| {
                     let mut ar = CreateActionRow::default();
@@ -153,6 +157,7 @@ where
         .await?)
 }
 
+/// Create paged message buttons
 fn create_page_buttons(ar: &mut CreateActionRow, index: usize, len: usize) -> &mut CreateActionRow {
     let mut first = CreateButton::default();
     first

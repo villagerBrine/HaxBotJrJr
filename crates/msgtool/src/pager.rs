@@ -1,7 +1,7 @@
 //! `Pager` is used to navigate pages (list of `P`), and can construct new pages from source `D` on
 //! demand.
-//! This means that `Pager`can have list of source data for generating pages from, but it will only
-//! do it if that page is needed.
+//! This means that `Pager` can have list of source data for generating pages from, but it will only
+//! generate the page if it is needed.
 //!
 //! It is primarily used to lazily display paged discord messages.
 

@@ -1,8 +1,10 @@
-use crate::member::MemberId;
+//! Models for the discord table
+use crate::model::member::MemberId;
 
 pub type DiscordId = i64;
 
 #[derive(Debug)]
+/// Discord table model
 pub struct DiscordProfile {
     pub id: DiscordId,
     pub mid: Option<MemberId>,
@@ -12,6 +14,5 @@ pub struct DiscordProfile {
     pub reaction: i64,
     pub voice: i64,
     pub voice_week: i64,
-    pub activity: i64
+    pub activity: i64,
 }
-

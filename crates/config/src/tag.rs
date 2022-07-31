@@ -1,14 +1,17 @@
-//! Tags can be attached to an object, and describes how the bot should treat it
+//! Tags can be attached to an object, and describes how the bot should treat it or marking it as
+//! relevant to some functionality.
+//!
+//! All tag type's `from_str` should accept unique strings overall in order for `TagWrap` to work
+//! properly.
 use std::collections::hash_map::Keys;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
-use std::io;
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use util::impl_debug_display;
+use util::{impl_debug_display, ioerr};
 
 pub const CHANNEL_TAGS: [ChannelTag; 1] = [ChannelTag::NoTrack];
 pub const TEXT_CHANNEL_TAGS: [TextChannelTag; 5] = [
@@ -111,13 +114,13 @@ impl Tag for UserTag {
 }
 
 impl FromStr for UserTag {
-    type Err = io::Error;
+    type Err = std::io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "NoNickUpdate" => Self::NoNickUpdate,
             "NoRoleUpdate" => Self::NoRoleUpdate,
-            _ => return Err(io::Error::new(io::ErrorKind::Other, "Failed to convert from str to UserTag")),
+            _ => return ioerr!("Failed to parse '{}' as UserTag", s),
         })
     }
 }
@@ -139,14 +142,12 @@ impl Tag for ChannelTag {
 }
 
 impl FromStr for ChannelTag {
-    type Err = io::Error;
+    type Err = std::io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
             "NoTrack" => Self::NoTrack,
-            _ => {
-                return Err(io::Error::new(io::ErrorKind::Other, "Failed to convert from str to ChannelTag"))
-            }
+            _ => return ioerr!("Failed to parse '{}' as ChannelTag", s),
         })
     }
 }
@@ -176,7 +177,7 @@ impl Tag for TextChannelTag {
 }
 
 impl FromStr for TextChannelTag {
-    type Err = io::Error;
+    type Err = std::io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(match s {
@@ -185,12 +186,7 @@ impl FromStr for TextChannelTag {
             "XpLog" => Self::XpLog,
             "OnlineLog" => Self::OnlineLog,
             "Summary" => Self::Summary,
-            _ => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Failed to convert from str to TextChannelTag",
-                ))
-            }
+            _ => return ioerr!("Failed to parse '{}' as TextChannelTag", s),
         })
     }
 }

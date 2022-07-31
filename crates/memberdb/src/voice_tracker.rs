@@ -6,6 +6,7 @@ use serenity::prelude::TypeMapKey;
 use tokio::sync::Mutex;
 
 #[derive(Debug)]
+/// Tracks the voice chat duration of discord members.
 pub struct VoiceTracker(HashMap<u64, Instant>);
 
 impl VoiceTracker {
@@ -13,6 +14,7 @@ impl VoiceTracker {
         Self(HashMap::new())
     }
 
+    /// Get all tracked vc durations
     pub fn track_all_voice(&mut self) -> impl Iterator<Item = (&u64, Duration)> {
         self.0.iter_mut().map(|(k, v)| {
             let new_instant = Instant::now();
@@ -22,6 +24,8 @@ impl VoiceTracker {
         })
     }
 
+    /// Get the vc duration of discord member, if there is none, begin duration tracking and return
+    /// `None`
     pub fn track_voice(&mut self, id: &u64) -> Option<Duration> {
         match self.0.get_mut(id) {
             Some(instant) => {
@@ -37,6 +41,7 @@ impl VoiceTracker {
         }
     }
 
+    /// Stop the duration tracking of discord member, and returns tracked duration if there is any
     pub fn untrack_voice(&mut self, id: &u64) -> Option<Duration> {
         if let Some(instant) = self.0.get(id) {
             let dur = Instant::now().saturating_duration_since(*instant);
@@ -48,6 +53,7 @@ impl VoiceTracker {
     }
 }
 
+/// Bot data key for `VoiceTracker`
 pub struct VoiceTrackerContainer;
 
 impl TypeMapKey for VoiceTrackerContainer {
@@ -55,6 +61,7 @@ impl TypeMapKey for VoiceTrackerContainer {
 }
 
 impl VoiceTrackerContainer {
+    /// Create a new `VoiceTracker` container
     pub fn new() -> Arc<Mutex<VoiceTracker>> {
         Arc::new(Mutex::new(VoiceTracker::new()))
     }

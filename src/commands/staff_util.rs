@@ -4,7 +4,7 @@ use serenity::framework::standard::{Args, CommandResult};
 use serenity::model::channel::Message;
 use tracing::error;
 
-use util::{ctx, some};
+use util::{ctx, ok, some};
 
 use crate::checks::STAFF_CHECK;
 use crate::{cmd_bail, data, finish};
@@ -33,8 +33,8 @@ async fn fix_nick(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         finish!(ctx, msg, "Can't find specified discord user")
     );
 
-    let discord_id = some!(
-        memberdb::utils::from_user_id(discord_member.as_ref().user.id),
+    let discord_id = ok!(
+        i64::try_from(discord_member.as_ref().user.id.0),
         cmd_bail!("Failed to convert user id to discord id")
     );
     let mid = {
@@ -80,8 +80,8 @@ async fn fix_role(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         finish!(ctx, msg, "Can't find specified discord user")
     );
 
-    let discord_id = some!(
-        memberdb::utils::from_user_id(discord_member.as_ref().user.id),
+    let discord_id = ok!(
+        i64::try_from(discord_member.as_ref().user.id.0),
         cmd_bail!("Failed to convert user id to discord id")
     );
 
@@ -134,7 +134,9 @@ async fn sync_member_ign(ctx: &Context, msg: &Message, arg: Args) -> CommandResu
 
     {
         let db = db.write().await;
-        ctx!(memberdb::update_ign(&db, &mcid, &ign).await)?
+        let mut tx = ctx!(db.begin().await)?;
+        ctx!(memberdb::update_ign(&mut tx, &mcid, &ign).await)?;
+        ctx!(tx.commit().await)?;
     }
 
     finish!(ctx, msg, "Ign updated to {}", ign)
@@ -145,7 +147,7 @@ async fn sync_member_ign(ctx: &Context, msg: &Message, arg: Args) -> CommandResu
 async fn get_rank_symbols(ctx: &Context, msg: &Message, _: Args) -> CommandResult {
     let mut content = String::new();
 
-    for rank in memberdb::member::MEMBER_RANKS {
+    for rank in memberdb::model::member::MEMBER_RANKS {
         content.push_str(&format!("**{}** `{}`\n", rank, rank.get_symbol()));
     }
 

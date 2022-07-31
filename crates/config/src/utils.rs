@@ -1,12 +1,14 @@
+//! Config utilities
 use std::fmt;
-use std::io;
 use std::str::FromStr;
+
+use util::ioerr;
 
 use crate::tag::{ChannelTag, Tag, TextChannelTag, UserTag};
 
 #[derive(Debug, Eq, Hash, Clone, PartialEq)]
 /// Union of different tag types.
-/// Can be used to convert a string to tag using `from_str`
+/// Can be used to convert a string to any tag.
 pub enum TagWrap {
     Channel(ChannelTag),
     TextChannel(TextChannelTag),
@@ -24,7 +26,7 @@ impl Tag for TagWrap {
 }
 
 impl FromStr for TagWrap {
-    type Err = io::Error;
+    type Err = std::io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if let Ok(tag) = ChannelTag::from_str(s) {
@@ -36,7 +38,7 @@ impl FromStr for TagWrap {
         if let Ok(tag) = UserTag::from_str(s) {
             return Ok(Self::User(tag));
         }
-        Err(io::Error::new(io::ErrorKind::Other, "Failed to convert from str to TagWrap"))
+        ioerr!("Failed to convert from '{}' to TagWrap", s)
     }
 }
 

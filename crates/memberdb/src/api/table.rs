@@ -1,18 +1,18 @@
+//! Functions that fetches multiple rows from database
 use std::cmp::Ordering;
-use std::io;
 use std::str::FromStr;
 
 use anyhow::{bail, Result};
 use serenity::client::Cache;
 use sqlx::sqlite::SqliteRow;
 use sqlx::Row;
-use util::some;
+use util::{ioerr, some};
 
-use crate::error::ParseMemberFilterError;
-use crate::guild::GuildRank;
-use crate::member::{MemberRank, MemberType};
+use crate::model::guild::GuildRank;
+use crate::model::member::{MemberRank, MemberType};
 use crate::DB;
 
+/// Represent tracked stats in the database
 pub enum Stat {
     Message(bool),
     Voice(bool),
@@ -21,6 +21,7 @@ pub enum Stat {
 }
 
 impl Stat {
+    /// Get the stat's corresponding table name
     pub fn table(&self) -> &str {
         match self {
             Self::Message(_) | Self::Voice(_) => "discord",
@@ -29,9 +30,9 @@ impl Stat {
         }
     }
 
+    /// Get the stat's corresponding column name
     pub fn column(&self) -> &str {
         match self {
-            // Bad formatter :(
             Self::Message(week) => {
                 if *week {
                     "message_week"
@@ -63,6 +64,7 @@ impl Stat {
         }
     }
 
+    /// Format stat value
     pub fn display_stat(&self, stat: i64) -> String {
         match self {
             Self::Voice(_) | Self::Online(_) => util::string::fmt_second(stat),
@@ -72,7 +74,7 @@ impl Stat {
 }
 
 impl FromStr for Stat {
-    type Err = io::Error;
+    type Err = std::io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (is_week, s) = if s.starts_with("weekly_") { (true, &s[7..]) } else { (false, s) };
@@ -81,11 +83,12 @@ impl FromStr for Stat {
             "voice" => Self::Voice(is_week),
             "online" => Self::Online(is_week),
             "xp" => Self::Xp(is_week),
-            _ => return Err(io::Error::new(io::ErrorKind::Other, "Failed to parse Stat from string")),
+            _ => return ioerr!("Failed to parse '{}' as Stat", s),
         })
     }
 }
 
+/// Filters that can be applied to a member
 pub enum MemberFilter {
     Partial,
     MemberType(MemberType),
@@ -94,6 +97,7 @@ pub enum MemberFilter {
 }
 
 impl MemberFilter {
+    /// Get the corresponding where clause
     pub fn where_clause(&self) -> Option<&str> {
         // format! would be more compact for some of the cases, but I really wants this function to
         // return &str instead String.
@@ -163,6 +167,8 @@ impl MemberFilter {
         }
     }
 
+    /// Some of the filter requires a column named "guild_rank", if it does, return the column
+    /// select clause for "guild_rank".
     pub fn guild_rank_select(&self) -> Option<&str> {
         match self {
             Self::GuildRank(..) => Some("(SELECT rank FROM guild WHERE id=member.mcid) AS guild_rank"),
@@ -171,6 +177,10 @@ impl MemberFilter {
     }
 }
 
+/// Extract ordering from filter string representation.
+/// Less = "<filter"
+/// Greater = ">filter"
+/// Equal = "filter"
 fn extract_ordering(s: &str) -> (Ordering, &str) {
     let symbol = s.chars().next().unwrap();
     match symbol {
@@ -181,10 +191,11 @@ fn extract_ordering(s: &str) -> (Ordering, &str) {
 }
 
 impl FromStr for MemberFilter {
-    type Err = ParseMemberFilterError;
+    type Err = std::io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if !s.is_empty() {
+            // Filters that can't have a ordering
             if s == "partial" {
                 return Ok(Self::Partial);
             }
@@ -192,6 +203,7 @@ impl FromStr for MemberFilter {
                 return Ok(Self::MemberType(member_type));
             }
 
+            // Filters that can have a ordering
             let (order, s) = extract_ordering(s);
             if let Ok(rank) = MemberRank::from_str(s) {
                 return Ok(Self::MemberRank(rank, order));
@@ -200,7 +212,7 @@ impl FromStr for MemberFilter {
                 return Ok(Self::GuildRank(rank, order));
             }
         }
-        Err(ParseMemberFilterError(s.to_string()))
+        ioerr!("Failed to parse '{}' as MemberFilter", s)
     }
 }
 
@@ -210,24 +222,33 @@ rank,discord,\
 
 const M_ORDER: &str = "ORDER BY ign NULLS LAST";
 
+/// Return all members as list with optional filter applied.
+/// Each member is represented as a list with following structure: [ign, discord name, member rank]
+/// If a field doesn't exists, an empty string is used.
 pub async fn list_members(cache: &Cache, db: &DB, filter: Option<MemberFilter>) -> Result<Vec<Vec<String>>> {
     Ok(sqlx::query(&match filter {
         Some(filter) => match filter.where_clause() {
             Some(clause) => match filter.guild_rank_select() {
+                // Select with filter and "guild_rank" column
                 Some(sel) => format!("{},{} FROM member WHERE {} {}", M_SELECT, sel, clause, M_ORDER),
+                // Select with filter
                 None => format!("{} FROM member WHERE {} {}", M_SELECT, clause, M_ORDER),
             },
+            // Select without filter
             None => bail!("Invalid filter"),
         },
         None => format!("{} FROM member {}", M_SELECT, M_ORDER),
     })
     .map(|r: SqliteRow| {
         vec![
+            // ign
             some!(r.get("ign"), "".to_string()),
+            // discord name
             match r.get::<Option<i64>, &str>("discord").map(|id| crate::utils::to_user(cache, id)) {
                 Some(Some(u)) => format!("{}#{}", u.name, u.discriminator),
                 _ => String::new(),
             },
+            // member rank
             match MemberRank::decode(&r.get::<String, &str>("rank")) {
                 Ok(rank) => rank.to_string(),
                 _ => String::new(),
@@ -238,6 +259,7 @@ pub async fn list_members(cache: &Cache, db: &DB, filter: Option<MemberFilter>) 
     .await?)
 }
 
+/// Get list of all ign that is associated with a member.
 pub async fn list_igns(db: &DB) -> Result<Vec<String>> {
     Ok(sqlx::query!("SELECT ign FROM wynn WHERE mid NOT NULL")
         .map(|r| r.ign)
@@ -245,6 +267,13 @@ pub async fn list_igns(db: &DB) -> Result<Vec<String>> {
         .await?)
 }
 
+/// Return a stat leaderboard and its heading.
+///
+/// The stat leaderboard can be applied with a filter.
+/// Each row contains following items: [lb rank, name, stat val].
+/// The name field is that member's ign, if not exist, their discord name is used.
+///
+/// if `no_zero` is true, then rows with stat val of 0 won't be included.
 pub async fn stat_leaderboard(
     cache: &Cache, db: &DB, stat: &Stat, filter: &Option<MemberFilter>, no_zero: bool,
 ) -> Result<(Vec<Vec<String>>, Vec<String>)> {

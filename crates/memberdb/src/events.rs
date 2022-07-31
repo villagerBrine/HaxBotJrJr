@@ -1,9 +1,10 @@
+//! Database events
 use event::signal;
 
-use crate::discord::DiscordId;
-use crate::guild::GuildRank;
-use crate::member::{MemberId, MemberRank, MemberType};
-use crate::wynn::McId;
+use crate::model::discord::DiscordId;
+use crate::model::guild::GuildRank;
+use crate::model::member::{MemberId, MemberRank, MemberType};
+use crate::model::wynn::McId;
 
 #[derive(Debug, Clone)]
 pub enum DBEvent {
@@ -43,6 +44,7 @@ pub enum DBEvent {
     WynnProfileUnbind {
         mid: MemberId,
         before: McId,
+        // Indicates if the member was/about to be removed
         removed: bool,
     },
     GuildProfileAdd {
@@ -61,9 +63,11 @@ pub enum DBEvent {
     DiscordProfileUnbind {
         mid: MemberId,
         before: DiscordId,
+        // Indicates if the member was/about to be removed
         removed: bool,
     },
     WeeklyReset {
+        // All the weekly leaderboards before the reset
         message_lb: (Vec<Vec<String>>, Vec<String>),
         voice_lb: (Vec<Vec<String>>, Vec<String>),
         online_lb: (Vec<Vec<String>>, Vec<String>),

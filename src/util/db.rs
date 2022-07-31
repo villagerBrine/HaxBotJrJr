@@ -2,9 +2,9 @@ use serenity::model::id::UserId;
 use tokio::sync::RwLock;
 
 use memberdb::error::DBError;
-use memberdb::member::{MemberId, MemberType, ProfileType};
+use memberdb::model::member::{MemberId, MemberType, ProfileType};
 use memberdb::DB;
-use util::{ctx, ok, some, some2};
+use util::{ctx, ok, some2};
 
 /// Given discord id and mc id, return their linked member ids.
 pub async fn get_profile_mids(db: &RwLock<DB>, discord_id: i64, mcid: &str) -> (Option<i64>, Option<i64>) {
@@ -24,7 +24,7 @@ impl TargetId {
     pub async fn get_mid(&self, db: &DB) -> Option<MemberId> {
         match self {
             Self::Discord(id) => {
-                let id = some!(memberdb::utils::from_user_id(*id), return None);
+                let id = ok!(i64::try_from(*id), return None);
                 some2!(memberdb::get_discord_mid(&db, id).await)
             }
             Self::Wynn(id) => some2!(memberdb::get_wynn_mid(&db, &id).await),

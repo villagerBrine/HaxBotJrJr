@@ -1,22 +1,22 @@
 //! Utilities for string presentation of database profiles
-use memberdb::discord::DiscordProfile;
-use memberdb::guild::GuildProfile;
+use memberdb::model::discord::DiscordProfile;
+use memberdb::model::guild::GuildProfile;
+use memberdb::model::wynn::WynnProfile;
 use memberdb::utils::Profiles;
-use memberdb::wynn::WynnProfile;
 use serenity::client::Cache;
 
 use util::some;
 
 /// Get the name of a member given its profiles.
-/// Name is composed of two parts, the upper part, and the lower part.
+/// Returns a 2 tuple, first item is the name, and the other is the remaining name.
 ///
-/// Lower part is formatted as `(member or guild rank) (ign or discord username)`.
+/// Name is formatted as `(member or guild rank) (ign or discord username)`.
 /// Member rank is prioritized over guild rank, and if both doesn't exists, then the rank portion
 /// of the string is cut.
 /// Ign is prioritized over discord username
 ///
-/// If the member have both an ign and a discord username, then the upper part is set to the one
-/// that isn't included in the lower part, otherwise it is empty.
+/// If the member have both an ign and a discord username, then the one that isn't included in the
+/// name is returned as the second item of the tuple.
 pub async fn get_names(cache: &Cache, profiles: &Profiles) -> (String, String) {
     let mut lower = "".to_string();
 

@@ -8,7 +8,7 @@ use tracing::error;
 
 use memberdb::error::DBError;
 use memberdb::events::DBEvent;
-use memberdb::member::{MemberId, MemberRank, ProfileType, MemberType};
+use memberdb::model::member::{MemberId, MemberRank, ProfileType, MemberType};
 use memberdb::table::{MemberFilter, Stat};
 use memberdb::DB;
 use msgtool::pager::Pager;
@@ -141,14 +141,19 @@ profiles on an existing member, use the command `link` instead");
             match memberdb::utils::get_discord_member_rank(&ctx, &guild, &discord_member.as_ref().user).await
             {
                 Ok(Some(rank)) => rank,
-                _ => memberdb::member::INIT_MEMBER_RANK,
+                _ => memberdb::model::member::INIT_MEMBER_RANK,
             }
         }
     };
 
     let result = {
         let db = db.write().await;
-        ctx!(memberdb::add_member(&db, discord_id, &mcid, &ign, rank).await, "Failed to add member")
+        let mut tx = ctx!(db.begin().await)?;
+        let r = ctx!(memberdb::add_member(&mut tx, discord_id, &mcid, &ign, rank).await, "Failed to add member");
+        if r.is_ok() {
+            ctx!(tx.commit().await)?;
+        }
+        r
     };
 
     finish!(
@@ -205,10 +210,15 @@ unlink one of them first, then call this command again"
     if let Some(mid) = wynn_mid {
         let result = {
             let db = db.write().await;
-            ctx!(
-                memberdb::bind_discord(&db, mid, Some(discord_id)).await,
+            let mut tx = ctx!(db.begin().await)?;
+            let r = ctx!(
+                memberdb::bind_discord(&mut tx, mid, Some(discord_id)).await,
                 "Failed to link discord profile to member"
-            )
+            );
+            if r.is_ok() {
+                ctx!(tx.commit().await)?;
+            }
+            r
         };
 
         finish!(
@@ -233,10 +243,15 @@ unlink one of them first, then call this command again"
 
         let result = {
             let db = db.write().await;
-            ctx!(
-                memberdb::bind_wynn(&db, mid, Some(&mcid), &ign).await,
+            let mut tx = ctx!(db.begin().await)?;
+            let r = ctx!(
+                memberdb::bind_wynn(&mut tx, mid, Some(&mcid), &ign).await,
                 "Failed to link wynn profile to member"
-            )
+            );
+            if r.is_ok() {
+                ctx!(tx.commit().await)?;
+            }
+            r
         };
 
         finish!(
@@ -284,8 +299,8 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
                 ctx!(util::discord::get_member_named(&ctx.http, &guild, target_arg).await)?,
                 finish!(ctx, msg, "Failed to find discord user of given name/nick")
             );
-            let discord_id = some!(
-                memberdb::utils::from_user_id(discord_member.as_ref().user.id),
+            let discord_id = ok!(
+                i64::try_from(discord_member.as_ref().user.id.0),
                 cmd_bail!("Failed to convert UserId into DiscordId")
             );
 
@@ -300,15 +315,20 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
             let rank =
                 match memberdb::utils::get_discord_member_rank(&ctx, &guild, &discord_member.as_ref().user).await {
                     Ok(Some(rank)) => rank,
-                    _ => memberdb::member::INIT_MEMBER_RANK,
+                    _ => memberdb::model::member::INIT_MEMBER_RANK,
                 };
 
             let result = {
                 let db = db.write().await;
-                ctx!(
-                    memberdb::add_member_discord(&db, discord_id, rank).await,
+                let mut tx = ctx!(db.begin().await)?;
+                let r = ctx!(
+                    memberdb::add_member_discord(&mut tx, discord_id, rank).await,
                     "Failed to add discord partial member"
-                )
+                );
+                if r.is_ok() {
+                    ctx!(tx.commit().await)?;
+                }
+                r
             };
 
             finish!(
@@ -337,12 +357,17 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
                 let db = db.write().await;
                 let rank = match memberdb::get_guild_rank(&db, &mcid).await {
                     Ok(g_rank) => g_rank.to_member_rank(),
-                    Err(_) => memberdb::member::INIT_MEMBER_RANK,
+                    Err(_) => memberdb::model::member::INIT_MEMBER_RANK,
                 };
-                ctx!(
-                    memberdb::add_member_wynn(&db, &mcid, rank, &target_arg).await,
+                let mut tx = ctx!(db.begin().await)?;
+                let r = ctx!(
+                    memberdb::add_member_wynn(&mut tx, &mcid, rank, &target_arg).await,
                     "Failed to add wynn partial member"
-                )
+                );
+                if r.is_ok() {
+                    ctx!(tx.commit().await)?;
+                }
+                r
             };
 
             finish!(
@@ -396,10 +421,15 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
 
             let result = {
                 let db = db.write().await;
-                ctx!(
-                    memberdb::bind_discord(&db, mid, None).await,
+                let mut tx = ctx!(db.begin().await)?;
+                let r = ctx!(
+                    memberdb::bind_discord(&mut tx, mid, None).await,
                     "Failed to unbind discord profile from member"
-                )
+                );
+                if r.is_ok() {
+                    ctx!(tx.commit().await)?;
+                }
+                r
             };
 
             match result {
@@ -424,10 +454,15 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
 
             let result = {
                 let db = db.write().await;
-                ctx!(
-                    memberdb::bind_wynn(&db, mid, None, "").await,
+                let mut tx = ctx!(db.begin().await)?;
+                let r = ctx!(
+                    memberdb::bind_wynn(&mut tx, mid, None, "").await,
                     "Failed to unbind wynn profile from member"
-                )
+                );
+                if r.is_ok() {
+                    ctx!(tx.commit().await)?;
+                }
+                r
             };
 
             match result {
@@ -474,7 +509,12 @@ pub async fn remove_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
 
     let result = {
         let db = db.write().await;
-        memberdb::remove_member(&db, mid).await
+        let mut tx = ctx!(db.begin().await)?;
+        let r = memberdb::remove_member(&mut tx, mid).await;
+        if r.is_ok() {
+            ctx!(tx.commit().await)?;
+        }
+        r
     };
 
     finish!(
@@ -501,8 +541,8 @@ async fn set_rank(ctx: &Context, msg: &Message, db: &RwLock<DB>, mid: i64, old_r
 
     let caller_rank = {
         let db = db.read().await;
-        let discord_id = some!(
-            memberdb::utils::from_user_id(msg.author.id),
+        let discord_id = ok!(
+            i64::try_from(msg.author.id.0),
             cmd_bail!("Failed to convert UserId to DiscordId")
         );
         let mid = some!(
@@ -520,7 +560,12 @@ async fn set_rank(ctx: &Context, msg: &Message, db: &RwLock<DB>, mid: i64, old_r
 
     let result = {
         let db = db.write().await;
-        memberdb::update_member_rank(&db, mid, rank).await
+        let mut tx = ctx!(db.begin().await)?;
+        let r = memberdb::update_member_rank(&mut tx, mid, rank).await;
+        if r.is_ok() {
+            ctx!(tx.commit().await)?;
+        }
+        r
     };
     finish!(
         ctx,
@@ -675,13 +720,13 @@ async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
             MinimalMembers(data.0)
         }).collect::<Vec<MinimalMembers>>());
         ctx!(
-            msgtool::interact::page(&ctx, msg.channel_id, &mut pager, 120).await,
+            msgtool::interact::page(&ctx, &msg.channel_id, &mut pager, 120).await,
             "Error when displaying member list pages"
         )?;
     } else {
         let mut pager = Pager::new(table_data);
         ctx!(
-            msgtool::interact::page(&ctx, msg.channel_id, &mut pager, 120).await,
+            msgtool::interact::page(&ctx, &msg.channel_id, &mut pager, 120).await,
             "Error when displaying member list pages"
         )?;
     };
@@ -733,13 +778,13 @@ async fn stat_leaderboard(ctx: &Context, msg: &Message, mut args: Args) -> Comma
             MinimalLB(data.0)
         }).collect::<Vec<MinimalLB>>());
         ctx!(
-            msgtool::interact::page(&ctx, msg.channel_id, &mut pager, 120).await,
+            msgtool::interact::page(&ctx, &msg.channel_id, &mut pager, 120).await,
             "Error when displaying stat leader board pages"
         )?;
     } else {
         let mut pager = Pager::new(table_data);
         ctx!(
-            msgtool::interact::page(&ctx, msg.channel_id, &mut pager, 120).await,
+            msgtool::interact::page(&ctx, &msg.channel_id, &mut pager, 120).await,
             "Error when displaying stat leader board pages"
         )?;
     };

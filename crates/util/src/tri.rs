@@ -34,6 +34,30 @@ macro_rules! ctx {
 }
 
 #[macro_export]
+/// Same as `ctx` but logged at warn level instead of error
+macro_rules! ctxw {
+    ($result:expr) => {
+        $result.map_err(|why| {
+            tracing::warn!("{:#}", why);
+            why
+        })
+    };
+    ($result:expr, $ctx:literal) => {
+        $result.map_err(|why| {
+            tracing::warn!("{}: {:#}", $ctx, why);
+            why
+        })
+    };
+    ($result:expr, $($ctx:tt)+) => {
+        $result.map_err(|why| {
+            let ctx = format!($($ctx)+);
+            tracing::warn!("{}: {:#}", ctx, why);
+            why
+        })
+    };
+}
+
+#[macro_export]
 /// Return unwrapped Ok value otherwise return specified expression
 /// If a context was given, it is the same as ok!(ctx!(..), ..)
 macro_rules! ok {

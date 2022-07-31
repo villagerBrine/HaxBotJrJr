@@ -1,10 +1,9 @@
 use std::fmt;
 
-use util::parse_error;
-
-use crate::member::{MemberId, MemberType, ProfileType};
+use crate::model::member::{MemberId, MemberType, ProfileType};
 
 #[derive(Debug)]
+/// Database errors
 pub enum DBError {
     MemberAlreadyExist(MemberId),
     WrongMemberType(MemberType),
@@ -23,8 +22,3 @@ impl fmt::Display for DBError {
     }
 }
 impl std::error::Error for DBError {}
-
-parse_error!(ParseProfileTypeError, "ProfileType");
-parse_error!(ParseMemberFilterError, "MemberFilter");
-parse_error!(ParseMemberRankError, "MemberRank");
-parse_error!(ParseMemberTypeError, "MemberType");

@@ -1,18 +1,21 @@
+//! Models for the member table
 use std::fmt;
 use std::str::FromStr;
 
 use anyhow::Result;
 use serenity::model::guild::{Guild, Role};
 
-use util::impl_sqlx_type;
+use util::{impl_sqlx_type, ioerr};
 
-use crate::discord::DiscordId;
-use crate::error::{ParseMemberRankError, ParseMemberTypeError, ParseProfileTypeError};
-use crate::wynn::McId;
+use crate::model::discord::DiscordId;
+use crate::model::wynn::McId;
 
 pub type MemberId = i64;
 
 #[derive(sqlx::Type, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+/// Member ranks.
+/// The lower the number the higher the rank.
+/// They are named this way so that when rank names are changed, no refactoring is needed.
 pub enum MemberRank {
     Zero,
     One,
@@ -32,6 +35,8 @@ pub const MEMBER_RANKS: [MemberRank; 7] = [
     MemberRank::Five,
     MemberRank::Six,
 ];
+/// Ranks which the bot should have permission over.
+/// This list is determined based on the position of the bot's role within the discord role list.
 pub const MANAGED_MEMBER_RANKS: [MemberRank; 5] = [
     MemberRank::Two,
     MemberRank::Three,
@@ -49,6 +54,7 @@ pub const MRANK_FIVE_STR: &str = "Rocketeer";
 pub const MRANK_SIX_STR: &str = "Cadet";
 
 impl MemberRank {
+    /// Get the rank that is one higher
     pub fn promote(&self) -> Option<Self> {
         if let Some(i) = MEMBER_RANKS.iter().position(|r| r == self) {
             if i > 0 {
@@ -58,6 +64,7 @@ impl MemberRank {
         None
     }
 
+    /// Get the rank that is one lower
     pub fn demote(&self) -> Option<Self> {
         if let Some(i) = MEMBER_RANKS.iter().position(|r| r == self) {
             if i < MEMBER_RANKS.len() - 1 {
@@ -67,18 +74,22 @@ impl MemberRank {
         None
     }
 
+    /// Get the corresponding discord role, aka one that has the same name as the rank
     pub fn get_role<'a>(&self, guild: &'a Guild) -> Option<&'a Role> {
         guild.role_by_name(&self.to_string())
     }
 
+    /// Get the corresponding group role
     pub fn get_group_role<'a>(&self, guild: &'a Guild) -> Option<&'a Role> {
         guild.role_by_name(self.get_group_name())
     }
 
+    /// Checks if it shares the same group role with the other rank
     pub fn is_same_group(&self, other: Self) -> bool {
         self.get_group_name() == other.get_group_name()
     }
 
+    /// Get the name of its group role
     pub fn get_group_name(&self) -> &str {
         match self {
             Self::Zero | Self::One | Self::Two => "Mission Specialist",
@@ -87,10 +98,12 @@ impl MemberRank {
         }
     }
 
+    /// Get the rank from discord role
     pub fn from_role(&self, role: &Role) -> Option<Self> {
         Self::from_str(&role.name).ok()
     }
 
+    /// Parse from enum variant names
     pub fn decode(s: &str) -> Result<Self> {
         Ok(match s {
             "Zero" => Self::Zero,
@@ -100,10 +113,11 @@ impl MemberRank {
             "Four" => Self::Four,
             "Five" => Self::Five,
             "Six" => Self::Six,
-            s => return Err(ParseMemberRankError(s.to_string()).into()),
+            s => return ioerr!("Failed to parse '{}' as MemberRank", s),
         })
     }
 
+    /// Get corresponding rank symbol
     pub fn get_symbol(&self) -> char {
         match self {
             Self::Zero => '❂',
@@ -132,7 +146,7 @@ impl fmt::Display for MemberRank {
 }
 
 impl FromStr for MemberRank {
-    type Err = ParseMemberRankError;
+    type Err = std::io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -143,12 +157,13 @@ impl FromStr for MemberRank {
             MRANK_FOUR_STR => Ok(Self::Four),
             MRANK_FIVE_STR => Ok(Self::Five),
             MRANK_SIX_STR => Ok(Self::Six),
-            _ => Err(ParseMemberRankError(s.to_string())),
+            _ => ioerr!("Failed to parse '{}' as MemberRank", s),
         }
     }
 }
 
 #[derive(Debug, Copy, Clone)]
+/// Types of member
 pub enum MemberType {
     Full,
     DiscordPartial,
@@ -159,6 +174,7 @@ pub enum MemberType {
 impl_sqlx_type!(MemberType);
 
 impl MemberType {
+    /// Is full member
     pub fn is_full(&self) -> bool {
         if let Self::Full = self {
             return true;
@@ -166,6 +182,7 @@ impl MemberType {
         false
     }
 
+    /// Is partial member
     pub fn is_partial(&self) -> bool {
         !self.is_full()
     }
@@ -183,7 +200,7 @@ impl fmt::Display for MemberType {
 }
 
 impl FromStr for MemberType {
-    type Err = ParseMemberTypeError;
+    type Err = std::io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
@@ -191,12 +208,13 @@ impl FromStr for MemberType {
             "guild" => Ok(Self::GuildPartial),
             "discord" => Ok(Self::DiscordPartial),
             "wynn" => Ok(Self::WynnPartial),
-            _ => Err(ParseMemberTypeError(s.to_string())),
+            _ => ioerr!("Failed to parse '{}' as MemberType", s),
         }
     }
 }
 
 #[derive(Debug)]
+/// Types of profiles
 pub enum ProfileType {
     Discord,
     Wynn,
@@ -204,19 +222,22 @@ pub enum ProfileType {
 }
 
 impl FromStr for ProfileType {
-    type Err = ParseProfileTypeError;
+    type Err = std::io::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "discord" => Ok(Self::Discord),
             "wynn" => Ok(Self::Wynn),
             "guild" => Ok(Self::Guild),
-            unknown => Err(ParseProfileTypeError(unknown.to_string())),
+            _ => ioerr!("Failed to parse '{}' as ProfileType", s),
         }
     }
 }
 
 #[derive(Debug, sqlx::FromRow)]
+/// Member table model with database primitives.
+/// Use this to query entire member from database, and convert it to `Member` with more
+/// convenient field values.
 pub struct MemberRow {
     pub id: MemberId,
     pub discord: Option<DiscordId>,
@@ -226,6 +247,9 @@ pub struct MemberRow {
 }
 
 #[derive(Debug)]
+/// Member table model.
+/// This can't be used to query entire member from database, instead query one using
+/// `MemberRow`, and then convert it to `Member`.
 pub struct Member {
     pub id: MemberId,
     pub discord: Option<DiscordId>,
@@ -235,6 +259,7 @@ pub struct Member {
 }
 
 impl Member {
+    /// Convert from `MemberRow`
     pub fn from_row(row: MemberRow) -> Result<Member> {
         let rank = MemberRank::decode(&row.rank)?;
         let member_type = MemberType::from_str(&row.member_type)?;

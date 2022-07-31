@@ -39,7 +39,7 @@ impl<'a> TargetObject<'a> {
         cache_http: &'a impl CacheHttp, db: &RwLock<DB>, client: &Client, guild: &'a Guild, s: &'a str,
     ) -> Result<TargetObject<'a>> {
         if let Some((prefix, name)) = s.split_once(':') {
-            return Self::parse(cache_http, &db, &client, &guild, prefix, name).await;
+            return Self::parse(cache_http, &db, client, guild, prefix, name).await;
         }
         bail!("Invalid format for target string")
     }
@@ -49,10 +49,10 @@ impl<'a> TargetObject<'a> {
         cache_http: &'a impl CacheHttp, db: &RwLock<DB>, client: &Client, guild: &'a Guild, s: &'a str,
     ) -> Result<TargetObject<'a>> {
         // Ping parsing is prioritized
-        if let Ok(d_obj) = DiscordObject::parse_ping(cache_http, &guild, &s).await {
+        if let Ok(d_obj) = DiscordObject::parse_ping(cache_http, guild, s).await {
             return Ok(Self::Discord(d_obj));
         }
-        Self::from_hinted(cache_http, &db, &client, &guild, s).await
+        Self::from_hinted(cache_http, &db, client, guild, s).await
     }
 
     /// Parse hinted target components: its prefix and target name.
@@ -74,13 +74,13 @@ impl<'a> TargetObject<'a> {
                 match id {
                     Some(id) => Ok(Self::Mc(id)),
                     None => {
-                        let id = wynn::get_ign_id(&client, name).await?;
+                        let id = wynn::get_ign_id(client, name).await?;
                         Ok(Self::Mc(id))
                     }
                 }
             }
             _ => {
-                let d_obj = DiscordObject::parse(cache_http, &guild, prefix, name).await?;
+                let d_obj = DiscordObject::parse(cache_http, guild, prefix, name).await?;
                 Ok(Self::Discord(d_obj))
             }
         }
@@ -109,7 +109,7 @@ impl<'a> DiscordObject<'a> {
         cache_http: &'a impl CacheHttp, guild: &'a Guild, s: &'a str,
     ) -> Result<DiscordObject<'a>> {
         if let Some((identifier, s)) = s.split_once(':') {
-            return Self::parse(cache_http, &guild, identifier, s).await;
+            return Self::parse(cache_http, guild, identifier, s).await;
         }
         bail!("Invalid format for target discord string")
     }
@@ -119,10 +119,10 @@ impl<'a> DiscordObject<'a> {
         cache_http: &'a impl CacheHttp, guild: &'a Guild, s: &'a str,
     ) -> Result<DiscordObject<'a>> {
         // Ping parsing is prioritized
-        if let Ok(obj) = Self::parse_ping(cache_http, &guild, s).await {
+        if let Ok(obj) = Self::parse_ping(cache_http, guild, s).await {
             return Ok(obj);
         }
-        Self::from_hinted(cache_http, &guild, s).await
+        Self::from_hinted(cache_http, guild, s).await
     }
 
     /// Parse pinged discord target string
@@ -135,11 +135,11 @@ impl<'a> DiscordObject<'a> {
                 // Tries to find member from cache, if failed, fetch it over api
                 return match guild.members.get(&UserId(id)) {
                     Some(member) => Ok(Self::Member(Cow::Borrowed(member))),
-                    None => Ok(Self::Member(Cow::Owned(guild.member(&cache_http, &UserId(id)).await?))),
+                    None => Ok(Self::Member(Cow::Owned(guild.member(cache_http, &UserId(id)).await?))),
                 };
             }
             DiscordObjectType::Channel => {
-                let channel_result = util::discord::get_channel(&guild, id);
+                let channel_result = util::discord::get_channel(guild, id);
                 if let Some(channel_result) = channel_result {
                     return Ok(Self::Channel(channel_result));
                 }
@@ -159,12 +159,12 @@ impl<'a> DiscordObject<'a> {
     ) -> Result<DiscordObject<'a>> {
         match ident {
             "d" => {
-                if let Some(member) = util::discord::get_member_named(&cache_http.http(), &guild, s).await? {
+                if let Some(member) = util::discord::get_member_named(&cache_http.http(), guild, s).await? {
                     return Ok(Self::Member(member));
                 }
             }
             "c" => {
-                let channel = util::discord::get_channel_named(&guild, s);
+                let channel = util::discord::get_channel_named(guild, s);
                 if let Some(channel) = channel {
                     return Ok(Self::Channel(channel));
                 }

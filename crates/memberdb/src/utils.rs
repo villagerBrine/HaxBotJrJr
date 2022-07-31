@@ -6,13 +6,13 @@ use serenity::model::user::User;
 
 use util::{ok, some2};
 
-use crate::discord::{DiscordId, DiscordProfile};
-use crate::guild::GuildProfile;
-use crate::member::{Member, MemberId, MemberRank, MEMBER_RANKS};
-use crate::wynn::{McId, WynnProfile};
+use crate::model::discord::{DiscordId, DiscordProfile};
+use crate::model::guild::GuildProfile;
+use crate::model::member::{Member, MemberId, MemberRank, MEMBER_RANKS};
+use crate::model::wynn::{McId, WynnProfile};
 use crate::DB;
 
-/// Get guild role of a user based on `MemberRank::to_string()`
+/// Get guild role of a user based on `MemberRank::to_string`
 pub async fn get_discord_member_rank(
     ctx: &Context, guild: &Guild, user: &User,
 ) -> Result<Option<MemberRank>> {
@@ -26,59 +26,54 @@ pub async fn get_discord_member_rank(
     Ok(None)
 }
 
+/// Remove the role and group role of a member rank from discord member
 pub async fn remove_discord_member_rank(
     ctx: &Context, rank: MemberRank, guild: &Guild, member: &mut DMember,
 ) -> Result<()> {
     let rank_role = rank.get_role(&guild);
     if let Some(role) = rank_role {
-        if member.roles.contains(&role.id) {
-            member
-                .remove_role(&ctx, role.id)
-                .await
-                .context("Failed to remove rank role from discord member")?;
-        }
+        member
+            .remove_role(&ctx, role.id)
+            .await
+            .context("Failed to remove rank role from discord member")?;
     }
 
     let group_role = rank.get_group_role(&guild);
     if let Some(role) = group_role {
-        if member.roles.contains(&role.id) {
-            member
-                .remove_role(&ctx, role.id)
-                .await
-                .context("Failed to remove group role from discord member")?;
-        }
+        member
+            .remove_role(&ctx, role.id)
+            .await
+            .context("Failed to remove group role from discord member")?;
     }
 
     Ok(())
 }
 
+/// Remove the rank roles and group roles from discord member except the ones that are associated
+/// with the specified member rank
 pub async fn remove_discord_member_ranks_except(
     ctx: &Context, rank: MemberRank, guild: &Guild, member: &mut DMember,
 ) -> Result<()> {
-    for other_rank in crate::member::MANAGED_MEMBER_RANKS {
+    for other_rank in crate::model::member::MANAGED_MEMBER_RANKS {
         if rank == other_rank {
             continue;
         }
 
         let rank_role = other_rank.get_role(&guild);
         if let Some(role) = rank_role {
-            if member.roles.contains(&role.id) {
-                member
-                    .remove_role(&ctx, role.id)
-                    .await
-                    .context("Failed to remove rank role from discord member")?;
-            }
+            member
+                .remove_role(&ctx, role.id)
+                .await
+                .context("Failed to remove rank role from discord member")?;
         }
 
         if !rank.is_same_group(other_rank) {
             let group_role = other_rank.get_group_role(&guild);
             if let Some(role) = group_role {
-                if member.roles.contains(&role.id) {
-                    member
-                        .remove_role(&ctx, role.id)
-                        .await
-                        .context("Failed to remove group role from discord member")?;
-                }
+                member
+                    .remove_role(&ctx, role.id)
+                    .await
+                    .context("Failed to remove group role from discord member")?;
             }
         }
     }
@@ -86,48 +81,39 @@ pub async fn remove_discord_member_ranks_except(
     Ok(())
 }
 
+/// Add the role and group role of a member rank to discord member
 pub async fn add_discord_member_rank(
     ctx: &Context, rank: MemberRank, guild: &Guild, member: &mut DMember,
 ) -> Result<()> {
     let rank_role = rank.get_role(&guild);
     if let Some(role) = rank_role {
-        if !member.roles.contains(&role.id) {
-            member
-                .add_role(&ctx, role.id)
-                .await
-                .context("Failed to add rank role to discord member")?;
-        }
+        member
+            .add_role(&ctx, role.id)
+            .await
+            .context("Failed to add rank role to discord member")?;
     }
 
     let group_role = rank.get_group_role(&guild);
     if let Some(role) = group_role {
-        if !member.roles.contains(&role.id) {
-            member
-                .add_role(&ctx, role.id)
-                .await
-                .context("Failed to add group role to discord member")?;
-        }
+        member
+            .add_role(&ctx, role.id)
+            .await
+            .context("Failed to add group role to discord member")?;
     }
 
     Ok(())
 }
 
-pub fn to_user_id(id: DiscordId) -> Option<UserId> {
-    u64::try_from(id).ok().map(|id| UserId(id))
-}
-
-pub fn from_user_id(id: UserId) -> Option<DiscordId> {
-    i64::try_from(id.0).ok()
-}
-
+/// Get the discord user from cache with given discord id
 pub fn to_user(cache: &Cache, id: DiscordId) -> Option<User> {
-    if let Some(id) = to_user_id(id) {
+    if let Ok(id) = u64::try_from(id).map(|id| UserId(id)) {
         return cache.user(id);
     }
     None
 }
 
 #[derive(Debug)]
+/// Database profiles
 pub struct Profiles {
     pub member: Option<Member>,
     pub guild: Option<GuildProfile>,
@@ -136,12 +122,14 @@ pub struct Profiles {
 }
 
 impl Profiles {
+    /// Checks if there are no profiles
     pub fn is_none(&self) -> bool {
         self.member.is_none() && self.guild.is_none() && self.discord.is_none() && self.wynn.is_none()
     }
 }
 
 #[derive(Debug)]
+/// All ids that are related to the database
 pub struct Ids {
     pub member: Option<MemberId>,
     pub mc: Option<McId>,
@@ -149,6 +137,7 @@ pub struct Ids {
 }
 
 impl Ids {
+    /// Fetch the profiles related to the id
     pub async fn to_profiles(&self, db: &DB) -> Profiles {
         let member = match self.member {
             Some(mid) => some2!(crate::get_member(&db, mid).await),
@@ -170,6 +159,7 @@ impl Ids {
     }
 }
 
+/// Get wynn and guild profile with specified mcid
 pub async fn get_wynn_guild_profiles(
     db: &DB, mcid: &Option<McId>,
 ) -> (Option<WynnProfile>, Option<GuildProfile>) {
@@ -183,6 +173,7 @@ pub async fn get_wynn_guild_profiles(
     }
 }
 
+/// Get profiles related to the member id
 pub async fn get_profiles_member(db: &DB, mid: MemberId) -> Profiles {
     match crate::get_member(&db, mid).await {
         Ok(Some(member)) => {
@@ -207,9 +198,11 @@ pub async fn get_profiles_member(db: &DB, mid: MemberId) -> Profiles {
     }
 }
 
+/// Get profiles related to the discord id
 pub async fn get_profiles_discord(db: &DB, discord_id: DiscordId) -> Profiles {
     match crate::get_discord_profile(&db, discord_id).await {
         Ok(Some(discord)) => {
+            // Checks if the discord is linked with a member
             if let Some(mid) = discord.mid {
                 if let Ok(Some(member)) = crate::get_member(&db, mid).await {
                     let (wynn, guild) = get_wynn_guild_profiles(&db, &member.mcid).await;
@@ -237,6 +230,7 @@ pub async fn get_profiles_discord(db: &DB, discord_id: DiscordId) -> Profiles {
     }
 }
 
+/// Get profiles related to the mcid
 pub async fn get_profiles_mc(db: &DB, mcid: &McId) -> Profiles {
     let (wynn, guild) = get_wynn_guild_profiles(&db, &Some(mcid.to_string())).await;
     let (member, discord) = match wynn {
@@ -255,6 +249,7 @@ pub async fn get_profiles_mc(db: &DB, mcid: &McId) -> Profiles {
     Profiles { wynn, guild, member, discord }
 }
 
+/// Get all ids related to the member
 pub async fn get_ids_member(db: &DB, mid: MemberId) -> Ids {
     match crate::member_exist(&db, mid).await.ok() {
         Some(exist) => {
@@ -273,6 +268,7 @@ pub async fn get_ids_member(db: &DB, mid: MemberId) -> Ids {
     }
 }
 
+/// Checks if the discord user is a member
 pub async fn is_discord_member(db: &DB, id: &UserId) -> bool {
     let discord_id = ok!(i64::try_from(id.0), "Failed to convert u64 to i64 (id)", return false);
     match crate::get_discord_mid(&db, discord_id).await {

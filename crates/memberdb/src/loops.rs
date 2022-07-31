@@ -1,3 +1,4 @@
+//! Loops required to manage the database
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -15,10 +16,11 @@ use event::timer::{TimerEvent, TimerSignal};
 use event::{DiscordContext, DiscordEvent, DiscordSignal, WynnEvent, WynnSignal};
 use util::{ctx, ok, some};
 
-use crate::guild::GuildRank;
+use crate::model::guild::GuildRank;
 use crate::voice_tracker::VoiceTracker;
 use crate::DB;
 
+/// Start database managing loops
 pub async fn start_loops(
     db: Arc<RwLock<DB>>, config: Arc<RwLock<Config>>, cache: Arc<Cache>, vt: Arc<Mutex<VoiceTracker>>,
     wynn_sig: WynnSignal, dc_sig: DiscordSignal, timer_sig: TimerSignal,
@@ -57,6 +59,8 @@ pub async fn start_loops(
 
     let shared_db = db.clone();
     tokio::spawn(async move {
+        // The actual voice tracking update is done here instead of the discord event listening
+        // loop
         info!("Starting voice tracking update loop");
         let mut interval = time::interval(ADuration::from_secs(60));
         loop {
@@ -85,7 +89,8 @@ pub async fn start_loops(
 }
 
 #[instrument(skip(db))]
-pub async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Vec<WynnEvent>> {
+/// Updates the database based on WynnEvent
+async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Vec<WynnEvent>> {
     match event {
         WynnEvent::MemberJoin { id, rank, ign, xp } => {
             let mid = {
@@ -94,8 +99,8 @@ pub async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Ve
             };
 
             match mid {
+                // Guild member already in database, checks for changes
                 Some(_) => {
-                    // Checking for changes
                     let (old_ign, old_rank) = {
                         let db = db.read().await;
                         let old_ign = crate::get_ign(&db, id).await;
@@ -105,6 +110,7 @@ pub async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Ve
 
                     let mut events = Vec::new();
 
+                    // Checks for ign change
                     if let Ok(old_ign) = old_ign {
                         if old_ign != *ign {
                             info!(%id, %old_ign, %ign, "Found ign change");
@@ -116,6 +122,7 @@ pub async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Ve
                         }
                     }
 
+                    // Checks for guild rank change
                     if let Ok(old_rank) = old_rank {
                         if old_rank.to_api() != *rank {
                             info!(%id, %old_rank, %rank, "Found guild rank change");
@@ -130,50 +137,73 @@ pub async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Ve
 
                     return Some(events);
                 }
+                // Add guild member to database
                 None => {
                     info!(%id, %rank, %ign, "Adding guild member");
-                    let rank = ok!(GuildRank::from_api(rank), "Error", return None);
+                    let rank = ok!(ctx!(GuildRank::from_api(rank)), return None);
+
                     let db = db.write().await;
+                    let mut tx = ok!(ctx!(db.begin().await), return None);
+
                     ok!(
-                        crate::bind_wynn_guild(&db, id, ign, true, rank).await,
+                        crate::bind_wynn_guild(&mut tx, id, ign, true, rank).await,
                         "Failed to add guild member",
                         return None
                     );
+
                     info!(%id, xp, "Initialize new guild member's xp");
-                    ok!(crate::update_xp(&db, id, *xp).await, "Failed to initalize xp", return None)
+                    ok!(crate::update_xp(&mut tx, id, *xp).await, "Failed to initalize xp", return None);
+
+                    let _ = ctx!(tx.commit().await);
                 }
             }
         }
         WynnEvent::MemberLeave { id, rank, ign } => {
             info!(%id, %rank, %ign, "Removing guild member");
-            let rank = ok!(GuildRank::from_api(rank), "Error", return None);
+            let rank = ok!(ctx!(GuildRank::from_api(rank)), return None);
             let db = db.write().await;
+            let mut tx = ok!(ctx!(db.begin().await), return None);
             ok!(
-                crate::bind_wynn_guild(&db, id, ign, false, rank).await,
+                crate::bind_wynn_guild(&mut tx, id, ign, false, rank).await,
                 "Failed to remove guild member",
                 return None
             );
+            let _ = ctx!(tx.commit().await);
         }
         WynnEvent::MemberRankChange { id, old_rank, new_rank, ign } => {
             info!(ign, %old_rank, %new_rank, "Updating guild member guild rank");
             let rank = ok!(GuildRank::from_api(new_rank), "Error", return None);
             let db = db.write().await;
+            let mut tx = ok!(ctx!(db.begin().await), return None);
             ok!(
-                crate::update_guild_rank(&db, id, rank).await,
+                crate::update_guild_rank(&mut tx, id, rank).await,
                 "Failed to update guild member guild rank",
                 return None
-            )
+            );
+            let _ = ctx!(tx.commit().await);
         }
         WynnEvent::MemberNameChange { id, new_name, .. } => {
             info!(%id, %new_name, "Updating guild member ign");
             let db = db.write().await;
-            ok!(crate::update_ign(&db, id, new_name).await, "Failed to update guild member ign", return None)
+            let mut tx = ok!(ctx!(db.begin().await), return None);
+            ok!(
+                crate::update_ign(&mut tx, id, new_name).await,
+                "Failed to update guild member ign",
+                return None
+            );
+            let _ = ctx!(tx.commit().await);
         }
         WynnEvent::MemberContribute { id, old_contrib, new_contrib, ign } => {
             let amount = new_contrib - old_contrib;
             info!(ign, amount, "Updating guild member xp");
             let db = db.write().await;
-            ok!(crate::update_xp(&db, id, amount).await, "Failed to increment guild member xp", return None)
+            let mut tx = ok!(ctx!(db.begin().await), return None);
+            ok!(
+                crate::update_xp(&mut tx, id, amount).await,
+                "Failed to increment guild member xp",
+                return None
+            );
+            let _ = ctx!(tx.commit().await);
         }
         WynnEvent::PlayerStay { ign, world: _world, elapsed } => {
             let id = {
@@ -187,11 +217,13 @@ pub async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Ve
                     "Failed to convert elapsed activity: u64 to i64",
                     return None
                 );
+                let mut tx = ok!(ctx!(db.begin().await), return None);
                 ok!(
-                    crate::update_activity(&db, &id, elapsed).await,
+                    crate::update_activity(&mut tx, &id, elapsed).await,
                     "Failed to update wynn activity",
                     return None
                 );
+                let _ = ctx!(tx.commit().await);
             }
         }
         _ => {}
@@ -199,13 +231,15 @@ pub async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Ve
     None
 }
 
-pub async fn process_discord_event(
+/// Updates the database based on discord event
+async fn process_discord_event(
     db: &RwLock<DB>, config: &RwLock<Config>, vt: &Mutex<VoiceTracker>, event: &DiscordEvent,
     ctx: &DiscordContext,
 ) {
     match event {
         DiscordEvent::Message { message } => {
-            let channel = ok!(message.channel(&ctx).await, "Failed to get message's guild", return);
+            // Checks if the message is from a tracked guild channel
+            let channel = ok!(message.channel(ctx).await, "Failed to get message's guild", return);
             let channel = match channel {
                 Channel::Guild(c) => c,
                 _ => return,
@@ -217,25 +251,29 @@ pub async fn process_discord_event(
                 }
             }
 
-            let id = some!(
-                crate::utils::from_user_id(message.author.id),
-                "Failed to convert UserId to DiscordId",
-                return
-            );
+            let id = ok!(i64::try_from(message.author.id), "Failed to convert UserId to DiscordId", return);
             let mid = {
                 let db = db.read().await;
                 ok!(crate::get_discord_mid(&db, id).await, return)
             };
             if mid.is_some() {
                 let db = db.write().await;
-                ok!(crate::update_message(&db, 1, id).await, "Failed to update discord message stat", return);
+                let mut tx = ok!(ctx!(db.begin().await), return);
+                ok!(
+                    crate::update_message(&mut tx, 1, id).await,
+                    "Failed to update discord message stat",
+                    return
+                );
+                let _ = ctx!(tx.commit().await);
             }
         }
         DiscordEvent::VoiceJoin { state } => {
-            if !ok!(is_channel_id_tracked(&ctx, &config, some!(state.channel_id, return)).await, return) {
+            // Checks if the channel is tracked
+            if !ok!(is_channel_id_tracked(ctx, config, some!(state.channel_id, return)).await, return) {
                 return;
             }
 
+            // Checks if the discord user is a member
             {
                 let db = db.read().await;
                 if !crate::utils::is_discord_member(&db, &state.user_id).await {
@@ -250,10 +288,12 @@ pub async fn process_discord_event(
             }
         }
         DiscordEvent::VoiceLeave { old_state } => {
-            if !ok!(is_channel_id_tracked(&ctx, &config, some!(old_state.channel_id, return)).await, return) {
+            // Checks if the channel is tracked
+            if !ok!(is_channel_id_tracked(ctx, config, some!(old_state.channel_id, return)).await, return) {
                 return;
             }
 
+            // Checks if the discord user is a member
             {
                 let db = db.read().await;
                 if !crate::utils::is_discord_member(&db, &old_state.user_id).await {
@@ -261,31 +301,33 @@ pub async fn process_discord_event(
                 }
             }
 
-            if old_state.mute || old_state.deaf {
-                return;
+            if !old_state.mute && !old_state.deaf {
+                info!(id = old_state.user_id.0, "Finish tracking for user left voice chat");
+                let dur = {
+                    let mut vt = vt.lock().await;
+                    some!(vt.untrack_voice(&old_state.user_id.0), return)
+                };
+
+                track_voice_db(&db, old_state.user_id.0, dur).await;
             }
-
-            info!(id = old_state.user_id.0, "Finish tracking for user left voice chat");
-            let dur = {
-                let mut vt = vt.lock().await;
-                some!(vt.untrack_voice(&old_state.user_id.0), return)
-            };
-
-            track_voice_db(&db, old_state.user_id.0, dur).await;
         }
         DiscordEvent::VoiceChange { old_state, new_state } => {
+            // Get if the old channel is tracked
             let old_tracked =
-                !ok!(is_channel_id_tracked(&ctx, &config, some!(old_state.channel_id, return)).await, return);
+                !ok!(is_channel_id_tracked(ctx, config, some!(old_state.channel_id, return)).await, return);
+            // If the channel didn't change and it isn't tracked, return
             if old_state.channel_id == new_state.channel_id && !old_tracked {
                 return;
             }
+            // Get if the new channel is tracked
             let new_tracked =
-                !ok!(is_channel_id_tracked(&ctx, &config, some!(new_state.channel_id, return)).await, return);
+                !ok!(is_channel_id_tracked(ctx, config, some!(new_state.channel_id, return)).await, return);
 
             if !old_tracked && !new_tracked {
                 return;
             }
 
+            // Checks if the discord user is a member
             {
                 let db = db.read().await;
                 if !crate::utils::is_discord_member(&db, &new_state.user_id).await {
@@ -302,7 +344,7 @@ pub async fn process_discord_event(
                     let mut vt = vt.lock().await;
                     some!(vt.untrack_voice(&new_state.user_id.0), return)
                 };
-                track_voice_db(&db, new_state.user_id.0, dur).await;
+                track_voice_db(db, new_state.user_id.0, dur).await;
             } else if !old_active && new_active {
                 info!(id = old_state.user_id.0, "Begin tracking for user became valid for tracking");
                 let mut vt = vt.lock().await;
@@ -313,16 +355,20 @@ pub async fn process_discord_event(
     }
 }
 
+/// Update a discord user's voice tracking in database
 async fn track_voice_db(db: &RwLock<DB>, user_id: u64, dur: Duration) {
     let dur = ok!(i64::try_from(dur.as_secs()), "Failed to convert u64 to i64 (duration)", return);
     let discord_id = ok!(i64::try_from(user_id), "Failed to convert u64 to i64 (id)", return);
 
-    let db = db.read().await;
-    if let Err(why) = crate::update_voice(&db, dur, discord_id).await {
+    let db = db.write().await;
+    let mut tx = ok!(ctx!(db.begin().await), return);
+    if let Err(why) = crate::update_voice(&mut tx, dur, discord_id).await {
         error!("Failed to update voice chat activity stat: {:#}", why);
     }
+    let _ = ctx!(tx.commit().await);
 }
 
+/// Checks if a channel is valid for tracking
 async fn is_channel_id_tracked(
     cache_http: &impl CacheHttp, config: &RwLock<Config>, channel_id: ChannelId,
 ) -> Result<bool> {
@@ -331,7 +377,7 @@ async fn is_channel_id_tracked(
         let config = config.read().await;
         match cache_http.cache() {
             Some(cache) => {
-                if config.is_channel_tracked(&cache, &channel) {
+                if config.is_channel_tracked(cache, &channel) {
                     return Ok(true);
                 }
             }

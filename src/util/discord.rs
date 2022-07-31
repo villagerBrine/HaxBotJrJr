@@ -3,7 +3,7 @@ use serenity::http::Http;
 use serenity::model::guild::{Guild, Member};
 use tokio::sync::RwLock;
 
-use memberdb::member::{MemberId, MemberRank};
+use memberdb::model::member::{MemberId, MemberRank};
 use memberdb::DB;
 use msgtool::pager::ToPage;
 use util::ctx;
@@ -12,12 +12,12 @@ use util::ctx;
 pub async fn fix_discord_roles(
     http: &Http, rank: MemberRank, guild: &Guild, member: &mut Member,
 ) -> Result<()> {
-    if memberdb::member::MANAGED_MEMBER_RANKS.contains(&rank) {
+    if memberdb::model::member::MANAGED_MEMBER_RANKS.contains(&rank) {
         util::discord::add_role(&http, rank.get_role(&guild), member).await?;
         util::discord::add_role(&http, rank.get_group_role(&guild), member).await?;
     }
 
-    for other_rank in memberdb::member::MANAGED_MEMBER_RANKS {
+    for other_rank in memberdb::model::member::MANAGED_MEMBER_RANKS {
         if rank == other_rank {
             continue;
         }

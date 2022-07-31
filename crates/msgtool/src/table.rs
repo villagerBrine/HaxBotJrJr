@@ -1,4 +1,4 @@
-//! Utilities for displaying tables
+//! Utilities for formatting tables
 use util::some;
 
 use crate::pager::ToPage;
@@ -53,7 +53,7 @@ pub fn format_table(table: &Vec<Vec<String>>, page_info: Option<(usize, usize)>)
     s
 }
 
-/// Iterate over all tablecolumns and find the max item length for each of them
+/// Iterate over all table (represented as 2d vector) columns and find the max width for each of them
 pub fn calc_cols_max_width(table: &Vec<Vec<String>>) -> Vec<usize> {
     if table.len() == 0 {
         return Vec::new();
@@ -119,7 +119,7 @@ pub fn make_page_indicator(page_index: usize, page_num: usize) -> String {
 }
 
 /// Data needed to create a table.
-/// Implements `ToPage` so it can be used with `Pager`
+/// Can be formatted into a table via `ToPage`
 pub struct TableData(pub Vec<Vec<String>>);
 
 impl TableData {
