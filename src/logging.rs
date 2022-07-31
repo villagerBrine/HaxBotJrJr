@@ -63,8 +63,11 @@ pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Co
         buffers.insert(k, String::new());
     }
     let buffers = Arc::new(Mutex::new(buffers));
+    let xp_buffer: HashMap<String, (String, i64, i64)> = HashMap::new();
+    let xp_buffer = Arc::new(Mutex::new(xp_buffer));
 
     let shared_buffers = Arc::clone(&buffers);
+    let shared_xp_buffer = Arc::clone(&xp_buffer);
     let shared_config = Arc::clone(&config);
     tokio::spawn(async move {
         info!("Starting discord log channel loop");
@@ -89,6 +92,21 @@ pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Co
                     let _ = ctx!(config.send(&cache_http, tag, &log).await);
                 }
             }
+
+            let mut log_buffer = String::new();
+            {
+                let mut xp_buffer = shared_xp_buffer.lock().unwrap();
+                for (ign, diff, xp) in xp_buffer.values() {
+                    let log = format!("**{}** contributed __{}__ xp, total *{}* xp", ign, diff, xp);
+                    log_buffer.push('\n');
+                    log_buffer.push_str(&log);
+                }
+                xp_buffer.clear();
+            }
+            {
+                let config = shared_config.read().await;
+                let _ = ctx!(config.send(&cache_http, &TextChannelTag::XpLog, &log_buffer).await);
+            }
         }
     });
 
@@ -109,12 +127,32 @@ pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Co
                     }
                 }
 
-                let log = some!(make_wynn_log(&event), continue);
-                {
-                    let mut buffers = buffers.lock().unwrap();
-                    let buffer = buffers.get_mut(&tag).unwrap();
-                    buffer.push('\n');
-                    buffer.push_str(&log);
+                match event {
+                    WynnEvent::MemberContribute { id, ign, old_contrib, new_contrib } => {
+                        let mut xp_buffer = xp_buffer.lock().unwrap();
+                        let diff = new_contrib - old_contrib;
+                        match xp_buffer.get_mut(id) {
+                            Some(contrib) => {
+                                if *ign != contrib.0 {
+                                    contrib.0 = ign.clone();
+                                }
+                                contrib.1 += diff;
+                                contrib.2 = *new_contrib;
+                            }
+                            None => {
+                                xp_buffer.insert(id.clone(), (ign.clone(), diff, *new_contrib));
+                            }
+                        }
+                    }
+                    _ => {
+                        let log = some!(make_wynn_log(&event), continue);
+                        {
+                            let mut buffers = buffers.lock().unwrap();
+                            let buffer = buffers.get_mut(&tag).unwrap();
+                            buffer.push('\n');
+                            buffer.push_str(&log);
+                        }
+                    }
                 }
             }
         }
