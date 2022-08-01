@@ -7,9 +7,10 @@ use serenity::builder::{CreateActionRow, CreateButton, CreateComponents};
 use serenity::client::bridge::gateway::ShardMessenger;
 use serenity::futures::StreamExt;
 use serenity::http::{CacheHttp, Http};
+use serenity::model::application::component::ButtonStyle;
+use serenity::model::application::interaction::message_component::MessageComponentInteraction;
+use serenity::model::application::interaction::InteractionResponseType;
 use serenity::model::id::{ChannelId, UserId};
-use serenity::model::interactions::message_component::{ButtonStyle, MessageComponentInteraction};
-use serenity::model::interactions::InteractionResponseType;
 
 use crate::pager::{Pager, ToPage};
 
