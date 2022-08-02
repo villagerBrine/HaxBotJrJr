@@ -103,7 +103,7 @@ pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Co
                 }
                 xp_buffer.clear();
             }
-            {
+            if !log_buffer.is_empty() {
                 let config = shared_config.read().await;
                 let _ = ctx!(config.send(&cache_http, &TextChannelTag::XpLog, &log_buffer).await);
             }
