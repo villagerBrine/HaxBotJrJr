@@ -5,6 +5,7 @@ pub mod error;
 pub mod events;
 pub mod loops;
 pub mod model;
+pub mod query;
 pub mod utils;
 pub mod voice_tracker;
 
@@ -18,7 +19,7 @@ use sqlx::{Pool, Sqlite};
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::RwLock;
 
-pub use crate::api::query::*;
+pub use crate::api::fetch::*;
 pub use crate::api::table;
 pub use crate::api::update::*;
 use crate::events::{DBEvent, DBSignal};
@@ -44,20 +45,7 @@ impl DB {
     /// Begin a transaction
     pub async fn begin(&self) -> Result<Transaction> {
         let tx = self.pool.begin().await.context("Failed to begin db transaction")?;
-        return Ok(Transaction { tx, db: &self });
-    }
-
-    /// Given a closure that takes a transaction, this function create a transaction, run the
-    /// closure, commit the transaction, and return the result of that closure
-    pub async fn begin_with<F, R, I>(&self, f: F) -> Result<I>
-    where
-        F: Fn(&mut Transaction) -> R,
-        R: std::future::Future<Output = Result<I>>,
-    {
-        let mut tx = self.begin().await?;
-        let result = f(&mut tx).await?;
-        tx.commit().await?;
-        Ok(result)
+        return Ok(Transaction { tx, signal: self.signal.clone() });
     }
 
     /// Get an event receiver
@@ -73,15 +61,20 @@ impl DB {
 
 #[derive(Debug)]
 /// A database transaction
-pub struct Transaction<'a> {
+pub struct Transaction {
     pub tx: sqlx::Transaction<'static, Sqlite>,
-    pub db: &'a DB,
+    pub signal: DBSignal,
 }
 
-impl<'a> Transaction<'a> {
+impl Transaction {
     /// Commit the transaction
     pub async fn commit(self) -> Result<()> {
         self.tx.commit().await.context("Failed to commit db transaction")
+    }
+
+    /// Broadcast an event
+    pub fn signal(&self, event: DBEvent) {
+        self.signal.signal(event);
     }
 }
 

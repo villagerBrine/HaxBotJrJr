@@ -226,7 +226,7 @@ const M_ORDER: &str = "ORDER BY ign NULLS LAST";
 /// Each member is represented as a list with following structure: [ign, discord name, member rank]
 /// If a field doesn't exists, an empty string is used.
 pub async fn list_members(cache: &Cache, db: &DB, filter: Option<MemberFilter>) -> Result<Vec<Vec<String>>> {
-    Ok(sqlx::query(&match filter {
+    let query = &match filter {
         Some(filter) => match filter.where_clause() {
             Some(clause) => match filter.guild_rank_select() {
                 // Select with filter and "guild_rank" column
@@ -238,8 +238,8 @@ pub async fn list_members(cache: &Cache, db: &DB, filter: Option<MemberFilter>) 
             None => bail!("Invalid filter"),
         },
         None => format!("{} FROM member {}", M_SELECT, M_ORDER),
-    })
-    .map(|r: SqliteRow| {
+    };
+    let query = sqlx::query(query).map(|r: SqliteRow| {
         vec![
             // ign
             some!(r.get("ign"), "".to_string()),
@@ -254,9 +254,8 @@ pub async fn list_members(cache: &Cache, db: &DB, filter: Option<MemberFilter>) 
                 _ => String::new(),
             },
         ]
-    })
-    .fetch_all(&db.pool)
-    .await?)
+    });
+    Ok(query.fetch_all(&db.pool).await?)
 }
 
 /// Get list of all ign that is associated with a member.
@@ -305,23 +304,19 @@ pub async fn stat_leaderboard(
         query.push_str(" AND stat");
     }
 
-    let result = sqlx::query(&query)
-        .map(|r: SqliteRow| {
-            let name = match r.get("ign") {
-                Some(ign) => ign,
-                None => {
-                    match r.get::<Option<i64>, &str>("discord").map(|id| crate::utils::to_user(cache, id)) {
-                        Some(Some(u)) => format!("{}#{}", u.name, u.discriminator),
-                        _ => String::new(),
-                    }
-                }
-            };
-            let lb_rank = r.get::<i64, &str>("r");
-            let stat_val = r.get::<i64, &str>("stat");
-            vec![lb_rank.to_string(), name, stat.display_stat(stat_val)]
-        })
-        .fetch_all(&db.pool)
-        .await?;
+    let query = sqlx::query(&query).map(|r: SqliteRow| {
+        let name = match r.get("ign") {
+            Some(ign) => ign,
+            None => match r.get::<Option<i64>, &str>("discord").map(|id| crate::utils::to_user(cache, id)) {
+                Some(Some(u)) => format!("{}#{}", u.name, u.discriminator),
+                _ => String::new(),
+            },
+        };
+        let lb_rank = r.get::<i64, &str>("r");
+        let stat_val = r.get::<i64, &str>("stat");
+        vec![lb_rank.to_string(), name, stat.display_stat(stat_val)]
+    });
+    let result = query.fetch_all(&db.pool).await?;
     let header = vec![String::from("#"), String::from("name"), column.to_string()];
 
     Ok((result, header))

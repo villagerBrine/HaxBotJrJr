@@ -4,9 +4,7 @@ use serenity::framework::standard::macros::command;
 use serenity::framework::standard::{Args, CommandResult};
 use serenity::model::channel::Message;
 use tokio::sync::RwLock;
-use tracing::error;
 
-use memberdb::error::DBError;
 use memberdb::events::DBEvent;
 use memberdb::model::member::{MemberId, MemberRank, ProfileType, MemberType};
 use memberdb::table::{MemberFilter, Stat};
@@ -413,7 +411,7 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
         ctx!(memberdb::get_member_links(&db, mid).await)?
     };
 
-    let removed = match profile_type {
+    match profile_type {
         ProfileType::Discord => {
             if old_discord.is_none() {
                 finish!(ctx, msg, "There is no linked discord profile for the command to unlink");
@@ -433,10 +431,7 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
             };
 
             match result {
-                Ok(is_removed) => {
-                    send!(ctx, msg, "Successfully unlinked discord profile");
-                    is_removed
-                }
+                Ok(_) => send!(ctx, msg, "Successfully unlinked discord profile"),
                 Err(_) => finish!(ctx, msg, "Failed to unlink discord profile from member"),
             }
         }
@@ -466,10 +461,7 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
             };
 
             match result {
-                Ok(is_removed) => {
-                    send!(ctx, msg, "Successfully unlinked wynn profile");
-                    is_removed
-                }
+                Ok(_) => send!(ctx, msg, "Successfully unlinked wynn profile"),
                 Err(_) => finish!(ctx, msg, "Failed to unlink wynn profile from member"),
             }
         }
@@ -477,15 +469,6 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
             unreachable!("How?");
         }
     };
-
-    if removed {
-        let db = db.read().await;
-        db.signal(DBEvent::MemberRemove {
-            mid,
-            discord_id: old_discord,
-            mcid: old_mcid,
-        });
-    }
     Ok(())
 }
 
@@ -507,10 +490,18 @@ pub async fn remove_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
 
     let mid = crate::parse_user_target_mid!(ctx, msg, db, client, guild, args.rest());
 
+    let member_type = {
+        let db = db.read().await;
+        memberdb::get_member_type(&db, mid).await?
+    };
+    if let MemberType::GuildPartial = member_type {
+        finish!(ctx, msg, "You can't remove a guild partial with this command")
+    }
+
     let result = {
         let db = db.write().await;
         let mut tx = ctx!(db.begin().await)?;
-        let r = memberdb::remove_member(&mut tx, mid).await;
+        let r = ctx!(memberdb::remove_member(&mut tx, mid).await, "Failed to remove member");
         if r.is_ok() {
             ctx!(tx.commit().await)?;
         }
@@ -522,14 +513,7 @@ pub async fn remove_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
         msg,
         match result {
             Ok(_) => "Successfully removed member",
-            Err(why) =>
-                if why.is::<DBError>() {
-                    // The only DBError can be returned is DBError::WrongMemberType
-                    "You can't remove a guild partial member unless they leave the guild"
-                } else {
-                    error!("Failed to remove member: {:#}", why);
-                    "Failed to remove member"
-                },
+            Err(_) => "Failed to remove member"
         }
     )
 }

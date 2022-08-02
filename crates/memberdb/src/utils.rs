@@ -140,19 +140,19 @@ impl Ids {
     /// Fetch the profiles related to the id
     pub async fn to_profiles(&self, db: &DB) -> Profiles {
         let member = match self.member {
-            Some(mid) => some2!(crate::get_member(&db, mid).await),
+            Some(mid) => some2!(crate::get_member(db, mid).await),
             None => None,
         };
         let guild = match &self.mc {
-            Some(mcid) => some2!(crate::get_guild_profile(&db, &mcid).await),
+            Some(mcid) => some2!(crate::get_guild_profile(db, &mcid).await),
             None => None,
         };
         let wynn = match &self.mc {
-            Some(mcid) => some2!(crate::get_wynn_profile(&db, &mcid).await),
+            Some(mcid) => some2!(crate::get_wynn_profile(db, &mcid).await),
             None => None,
         };
         let discord = match self.discord {
-            Some(discord) => some2!(crate::get_discord_profile(&db, discord).await),
+            Some(discord) => some2!(crate::get_discord_profile(db, discord).await),
             None => None,
         };
         Profiles { member, guild, discord, wynn }
@@ -165,8 +165,8 @@ pub async fn get_wynn_guild_profiles(
 ) -> (Option<WynnProfile>, Option<GuildProfile>) {
     match mcid {
         Some(id) => {
-            let wynn = ok!(crate::get_wynn_profile(&db, &id).await, None);
-            let guild = ok!(crate::get_guild_profile(&db, &id).await, None);
+            let wynn = ok!(crate::get_wynn_profile(db, &id).await, None);
+            let guild = ok!(crate::get_guild_profile(db, &id).await, None);
             (wynn, guild)
         }
         None => (None, None),
@@ -175,13 +175,13 @@ pub async fn get_wynn_guild_profiles(
 
 /// Get profiles related to the member id
 pub async fn get_profiles_member(db: &DB, mid: MemberId) -> Profiles {
-    match crate::get_member(&db, mid).await {
+    match crate::get_member(db, mid).await {
         Ok(Some(member)) => {
             let discord = match member.discord {
-                Some(id) => ok!(crate::get_discord_profile(&db, id).await, None),
+                Some(id) => ok!(crate::get_discord_profile(db, id).await, None),
                 None => None,
             };
-            let (wynn, guild) = get_wynn_guild_profiles(&db, &member.mcid).await;
+            let (wynn, guild) = get_wynn_guild_profiles(db, &member.mcid).await;
             Profiles {
                 member: Some(member),
                 guild,
@@ -200,12 +200,12 @@ pub async fn get_profiles_member(db: &DB, mid: MemberId) -> Profiles {
 
 /// Get profiles related to the discord id
 pub async fn get_profiles_discord(db: &DB, discord_id: DiscordId) -> Profiles {
-    match crate::get_discord_profile(&db, discord_id).await {
+    match crate::get_discord_profile(db, discord_id).await {
         Ok(Some(discord)) => {
             // Checks if the discord is linked with a member
             if let Some(mid) = discord.mid {
-                if let Ok(Some(member)) = crate::get_member(&db, mid).await {
-                    let (wynn, guild) = get_wynn_guild_profiles(&db, &member.mcid).await;
+                if let Ok(Some(member)) = crate::get_member(db, mid).await {
+                    let (wynn, guild) = get_wynn_guild_profiles(db, &member.mcid).await;
                     return Profiles {
                         member: Some(member),
                         guild,
@@ -232,11 +232,11 @@ pub async fn get_profiles_discord(db: &DB, discord_id: DiscordId) -> Profiles {
 
 /// Get profiles related to the mcid
 pub async fn get_profiles_mc(db: &DB, mcid: &McId) -> Profiles {
-    let (wynn, guild) = get_wynn_guild_profiles(&db, &Some(mcid.to_string())).await;
+    let (wynn, guild) = get_wynn_guild_profiles(db, &Some(mcid.to_string())).await;
     let (member, discord) = match wynn {
-        Some(WynnProfile { mid: Some(mid), .. }) => match crate::get_member(&db, mid).await {
+        Some(WynnProfile { mid: Some(mid), .. }) => match crate::get_member(db, mid).await {
             Ok(Some(member)) => match member.discord {
-                Some(discord_id) => match crate::get_discord_profile(&db, discord_id).await {
+                Some(discord_id) => match crate::get_discord_profile(db, discord_id).await {
                     Ok(Some(discord)) => (Some(member), Some(discord)),
                     _ => (Some(member), None),
                 },
@@ -251,10 +251,10 @@ pub async fn get_profiles_mc(db: &DB, mcid: &McId) -> Profiles {
 
 /// Get all ids related to the member
 pub async fn get_ids_member(db: &DB, mid: MemberId) -> Ids {
-    match crate::member_exist(&db, mid).await.ok() {
+    match crate::member_exist(db, mid).await.ok() {
         Some(exist) => {
             if exist {
-                let (discord, mc) = ok!(crate::get_member_links(&db, mid).await, (None, None));
+                let (discord, mc) = ok!(crate::get_member_links(db, mid).await, (None, None));
                 Ids { member: Some(mid), discord, mc }
             } else {
                 Ids {
@@ -271,7 +271,7 @@ pub async fn get_ids_member(db: &DB, mid: MemberId) -> Ids {
 /// Checks if the discord user is a member
 pub async fn is_discord_member(db: &DB, id: &UserId) -> bool {
     let discord_id = ok!(i64::try_from(id.0), "Failed to convert u64 to i64 (id)", return false);
-    match crate::get_discord_mid(&db, discord_id).await {
+    match crate::get_discord_mid(db, discord_id).await {
         Ok(Some(_)) => true,
         _ => false,
     }

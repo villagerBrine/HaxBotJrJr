@@ -1,4 +1,8 @@
 //! Functions for fetching data from the database
+//!
+//! Some function have a *_tx counterpart that accepts `Transaction` instead of `DB`. I know there
+//! are ways to make the functions able to work with both, but this is the easiest way and it
+//! works.
 use std::str::FromStr;
 
 use anyhow::{Context, Result};
@@ -8,7 +12,7 @@ use crate::model::discord::{DiscordId, DiscordProfile};
 use crate::model::guild::{GuildProfile, GuildProfileRow, GuildRank};
 use crate::model::member::{Member, MemberId, MemberRank, MemberRow, MemberType};
 use crate::model::wynn::{McId, WynnProfile, WynnProfileRow};
-use crate::DB;
+use crate::{Transaction, DB};
 
 /// Get member from database
 pub async fn get_member(db: &DB, mid: MemberId) -> Result<Option<Member>> {
@@ -44,6 +48,20 @@ pub async fn get_discord_mid(db: &DB, discord_id: DiscordId) -> Result<Option<Me
 pub async fn get_wynn_mid(db: &DB, mcid: &str) -> Result<Option<MemberId>> {
     let row = query!("SELECT mid FROM wynn WHERE id=?", mcid)
         .fetch_optional(&db.pool)
+        .await
+        .context("Failed to fetch mid from wynn table")?;
+    if let Some(row) = row {
+        if let Some(mid) = row.mid {
+            return Ok(Some(mid));
+        }
+    }
+    Ok(None)
+}
+
+/// Fetch wynn profile of given id (assuming it exists).
+pub async fn get_wynn_mid_tx(tx: &mut Transaction, mcid: &str) -> Result<Option<MemberId>> {
+    let row = query!("SELECT mid FROM wynn WHERE id=?", mcid)
+        .fetch_optional(&mut tx.tx)
         .await
         .context("Failed to fetch mid from wynn table")?;
     if let Some(row) = row {
@@ -90,10 +108,30 @@ pub async fn get_member_links(db: &DB, mid: MemberId) -> Result<(Option<DiscordI
     Ok((row.discord, row.mcid))
 }
 
+/// Get a member's discord and mc ids
+pub async fn get_member_links_tx(
+    tx: &mut Transaction, mid: MemberId,
+) -> Result<(Option<DiscordId>, Option<McId>)> {
+    let row = query!("SELECT discord,mcid FROM member WHERE oid=?", mid)
+        .fetch_one(&mut tx.tx)
+        .await
+        .context("Failed to fetch from member table")?;
+    Ok((row.discord, row.mcid))
+}
+
 /// Get a member's type
 pub async fn get_member_type(db: &DB, mid: MemberId) -> Result<MemberType> {
     let row = query!("SELECT type AS member_type FROM member WHERE oid=?", mid)
         .fetch_one(&db.pool)
+        .await
+        .context("Failed to fetch member.type")?;
+    Ok(MemberType::from_str(&row.member_type)?)
+}
+
+/// Get a member's type
+pub async fn get_member_type_tx(tx: &mut Transaction, mid: MemberId) -> Result<MemberType> {
+    let row = query!("SELECT type AS member_type FROM member WHERE oid=?", mid)
+        .fetch_one(&mut tx.tx)
         .await
         .context("Failed to fetch member.type")?;
     Ok(MemberType::from_str(&row.member_type)?)
@@ -127,6 +165,15 @@ pub async fn discord_profile_exist(db: &DB, discord_id: DiscordId) -> Result<boo
         .is_some())
 }
 
+/// If a discord profile of given id exists.
+pub async fn discord_profile_exist_tx(tx: &mut Transaction, discord_id: DiscordId) -> Result<bool> {
+    Ok(query!("SELECT id FROM discord WHERE id=?", discord_id)
+        .fetch_optional(&mut tx.tx)
+        .await
+        .context("Failed to fetch from discord table")?
+        .is_some())
+}
+
 /// Get wynn profile from database.
 pub async fn get_wynn_profile(db: &DB, mcid: &str) -> Result<Option<WynnProfile>> {
     let wynn = query_as!(WynnProfileRow, "SELECT * FROM wynn WHERE id=?", mcid)
@@ -140,6 +187,15 @@ pub async fn get_wynn_profile(db: &DB, mcid: &str) -> Result<Option<WynnProfile>
 pub async fn wynn_profile_exist(db: &DB, mcid: &str) -> Result<bool> {
     Ok(query!("SELECT id FROM wynn WHERE id=?", mcid)
         .fetch_optional(&db.pool)
+        .await
+        .context("Failed to fetch from wynn table")?
+        .is_some())
+}
+
+/// If a wynn profile of given id exists.
+pub async fn wynn_profile_exist_tx(tx: &mut Transaction, mcid: &str) -> Result<bool> {
+    Ok(query!("SELECT id FROM wynn WHERE id=?", mcid)
+        .fetch_optional(&mut tx.tx)
         .await
         .context("Failed to fetch from wynn table")?
         .is_some())
@@ -168,6 +224,16 @@ pub async fn is_in_guild(db: &DB, mcid: &str) -> Result<bool> {
         .unwrap_or(false))
 }
 
+/// Check if a mc id is in a guild
+pub async fn is_in_guild_tx(tx: &mut Transaction, mcid: &str) -> Result<bool> {
+    Ok(query!("SELECT guild FROM wynn WHERE id=?", mcid)
+        .fetch_optional(&mut tx.tx)
+        .await
+        .context("Failed to fetch wynn.guild")?
+        .map(|n| n.guild > 0)
+        .unwrap_or(false))
+}
+
 /// Get guild profile from database.
 pub async fn get_guild_profile(db: &DB, mcid: &str) -> Result<Option<GuildProfile>> {
     let guild = query_as!(GuildProfileRow, "SELECT * FROM guild WHERE id=?", mcid)
@@ -184,6 +250,15 @@ pub async fn get_guild_profile(db: &DB, mcid: &str) -> Result<Option<GuildProfil
 pub async fn guild_profile_exist(db: &DB, mcid: &str) -> Result<bool> {
     Ok(query!("SELECT id FROM guild WHERE id=?", mcid)
         .fetch_optional(&db.pool)
+        .await
+        .context("Failed to select from guild table")?
+        .is_some())
+}
+
+/// If a guild profile of given id exists.
+pub async fn guild_profile_exist_tx(tx: &mut Transaction, mcid: &str) -> Result<bool> {
+    Ok(query!("SELECT id FROM guild WHERE id=?", mcid)
+        .fetch_optional(&mut tx.tx)
         .await
         .context("Failed to select from guild table")?
         .is_some())
