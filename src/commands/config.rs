@@ -38,7 +38,7 @@ for operations on those tags, like adding/removing tags, see `help tag` for more
 #[example("NoTrack")]
 /// Describe what object the given tag can be attached to and what it means.
 async fn describe_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let content = match arg!(ctx, msg, args, TagWrap:"Invalid tag, use command `tag` to get list of tags") {
+    let content = match arg!(ctx, msg, args, "tag": TagWrap) {
         TagWrap::User(t) => format!("User/role tag: {}", t.describe()),
         TagWrap::Channel(t) => format!("Channel/category tag: {}", t.describe()),
         TagWrap::TextChannel(t) => format!("Text channel tag: {}", t.describe()),
@@ -64,13 +64,13 @@ async fn describe_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandRe
 /// - __Role__: "r:<role name>", ex: "r:Mission Specialist"
 async fn add_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
-    let (tag, target_arg) = arg!(ctx, msg, args,
-        TagWrap: "Invalid tag, use command `tag` to get list of tags",
-        ..);
-    let target = ok!(
-        DiscordObject::from_str(&ctx, &guild, &target_arg).await,
-        finish!(ctx, msg, "Invalid target, see `help tag add` for help")
-    );
+    let tag = arg!(ctx, msg, args, "tag": TagWrap);
+    let target_arg = args.rest();
+
+    let target = match DiscordObject::from_str(&ctx, &guild, &target_arg).await {
+        Ok(v) => v,
+        Err(why) => finish!(ctx, msg, format!("Invalid target: {}", why)),
+    };
     let config = data!(ctx, "config");
 
     match target {
@@ -137,13 +137,13 @@ async fn add_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
 /// - __Role__: "r:<role name>", ex: "r:Mission Specialist"
 async fn remove_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
-    let (tag, target_arg) = arg!(ctx, msg, args,
-        TagWrap: "Invalid tag, use command `tag` to get list of tags",
-        ..);
-    let target = ok!(
-        DiscordObject::from_str(&ctx, &guild, &target_arg).await,
-        finish!(ctx, msg, "Invalid target, see `help tag remove` for help")
-    );
+    let tag = arg!(ctx, msg, args, "tag": TagWrap);
+    let target_arg = args.rest();
+
+    let target = match DiscordObject::from_str(&ctx, &guild, &target_arg).await {
+        Ok(v) => v,
+        Err(why) => finish!(ctx, msg, format!("Invalid target: {}", why)),
+    };
     let config = data!(ctx, "config");
 
     match target {
@@ -205,9 +205,10 @@ async fn remove_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
 async fn show_tags(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let arg = args.rest();
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
+
     let target = ok!(
-        DiscordObject::from_str(&ctx, &guild, &arg).await,
-        finish!(ctx, msg, "Invalid target, see `help tag show` for help")
+        DiscordObject::from_str(&ctx, &guild, arg).await,
+        finish!(ctx, msg, "Invalid target, see `help tag remove` for help")
     );
     let config = data!(ctx, "config");
 
@@ -316,7 +317,7 @@ async fn show_tags(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[example("NoNickUpdate")]
 /// List all objects with this tag attached.
 async fn list_tagged(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let tag = arg!(ctx, msg, args, TagWrap: "Invalid tag, use command `tag` to get list of tags");
+    let tag = arg!(ctx, msg, args, "tag": TagWrap);
     let config = data!(ctx, "config");
 
     let mut content = String::new();

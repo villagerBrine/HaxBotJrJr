@@ -6,18 +6,18 @@ use serenity::model::channel::Message;
 use tokio::sync::RwLock;
 
 use memberdb::events::DBEvent;
-use memberdb::model::member::{MemberId, MemberRank, ProfileType, MemberType};
+use memberdb::model::member::{MemberId, MemberRank, MemberType, ProfileType};
 use memberdb::table::{MemberFilter, Stat};
 use memberdb::DB;
 use msgtool::pager::Pager;
 use msgtool::parser::{DiscordObject, TargetObject};
 use msgtool::table::TableData;
-use util::{ok, some, ctx};
+use util::{ctx, ok, some};
 
 use crate::checks::{MAINSERVER_CHECK, STAFF_CHECK};
 use crate::util::db::TargetId;
 use crate::util::discord::{MinimalLB, MinimalMembers};
-use crate::{arg, option_arg, flag_arg, cmd_bail, data, finish, send, send_embed};
+use crate::{arg, cmd_bail, data, finish, flag, send, send_embed};
 
 #[command("profile")]
 #[only_in(guild)]
@@ -47,14 +47,10 @@ async fn display_profile(ctx: &Context, msg: &Message, args: Args) -> CommandRes
         let db = db.read().await;
         match target {
             TargetId::Discord(id) => {
-                let id = ctx!(
-                    i64::try_from(id.0),
-                    "Failed to convert u64 into i64"
-                )?;
+                let id = ctx!(i64::try_from(id.0), "Failed to convert u64 into i64")?;
                 memberdb::utils::get_profiles_discord(&db, id).await
             }
-            TargetId::Wynn(id) => {memberdb::utils::get_profiles_mc(&db, &id).await
-            }
+            TargetId::Wynn(id) => memberdb::utils::get_profiles_mc(&db, &id).await,
         }
     };
 
@@ -108,9 +104,7 @@ async fn display_profile(ctx: &Context, msg: &Message, args: Args) -> CommandRes
 /// otherwise the bot attempts to find a rank role on `discord_user` and use that.
 /// If all fails, the lowest rank is used.
 pub async fn add_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let (discord_name, ign) = arg!(ctx, msg, args, 
-        String: "Discord user name not provided",
-        String: "Mc ign not provided");
+    let (discord_name, ign) = arg!(ctx, msg, args, "discord_user", "ign");
 
     let (db, client) = data!(ctx, "db", "reqwest");
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
@@ -147,7 +141,8 @@ profiles on an existing member, use the command `link` instead");
     let result = {
         let db = db.write().await;
         let mut tx = ctx!(db.begin().await)?;
-        let r = ctx!(memberdb::add_member(&mut tx, discord_id, &mcid, &ign, rank).await, "Failed to add member");
+        let r =
+            ctx!(memberdb::add_member(&mut tx, discord_id, &mcid, &ign, rank).await, "Failed to add member");
         if r.is_ok() {
             ctx!(tx.commit().await)?;
         }
@@ -178,9 +173,7 @@ profiles on an existing member, use the command `link` instead");
 /// This can be used to add an account to member, or update one's account.
 /// Note that you can't update a member's mc account.
 pub async fn link_profile(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let (discord_name, ign) = arg!(ctx, msg, args, 
-        String: "Discord user name not provided", 
-        String: "Mc ign not provided");
+    let (discord_name, ign) = arg!(ctx, msg, args, "discord_user", "ign");
 
     let (db, client) = data!(ctx, "db", "reqwest");
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
@@ -280,9 +273,8 @@ unlink one of them first, then call this command again"
 /// For wynn partial member, if they're in the guild, their guild rank is used,
 /// otherwise the lowest rank is used.
 async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let (profile_type, target_arg) = arg!(ctx, msg, args,
-        ProfileType: "Partial member type not provided or is invalid, see `help addPartial` for help",
-        ..);
+    let profile_type = arg!(ctx, msg, args, "partial member type": ProfileType);
+    let target_arg = args.rest();
 
     if let ProfileType::Guild = profile_type {
         finish!(ctx, msg, "Invalid partial member type (need to be discord or wynn)");
@@ -295,7 +287,7 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
         ProfileType::Discord => {
             let discord_member = some!(
                 ctx!(util::discord::get_member_named(&ctx.http, &guild, target_arg).await)?,
-                finish!(ctx, msg, "Failed to find discord user of given name/nick")
+                finish!(ctx, msg, "Failed to find discord user of given name")
             );
             let discord_id = ok!(
                 i64::try_from(discord_member.as_ref().user.id.0),
@@ -311,7 +303,9 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
             }
 
             let rank =
-                match memberdb::utils::get_discord_member_rank(&ctx, &guild, &discord_member.as_ref().user).await {
+                match memberdb::utils::get_discord_member_rank(&ctx, &guild, &discord_member.as_ref().user)
+                    .await
+                {
                     Ok(Some(rank)) => rank,
                     _ => memberdb::model::member::INIT_MEMBER_RANK,
                 };
@@ -393,9 +387,8 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
 /// - __Discord user__: "d:<username>", ex: "d:Pucaet" or "d:Pucaet#9528"
 /// - __Mc account__: "m:<ign>", ex: "m:SephDark18"
 async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let (profile_type, target_arg) = arg!(ctx, msg, args,
-        ProfileType: "Profile type not provided or is invalid, see `help unlink` for help",
-        ..);
+    let profile_type = arg!(ctx, msg, args, "partial member type": ProfileType);
+    let target_arg = args.rest();
 
     if let ProfileType::Guild = profile_type {
         finish!(ctx, msg, "Invalid profile type (need to be discord or wynn)");
@@ -513,22 +506,22 @@ pub async fn remove_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
         msg,
         match result {
             Ok(_) => "Successfully removed member",
-            Err(_) => "Failed to remove member"
+            Err(_) => "Failed to remove member",
         }
     )
 }
 
-async fn set_rank(ctx: &Context, msg: &Message, db: &RwLock<DB>, mid: i64, old_rank: MemberRank, rank: MemberRank) -> CommandResult {
+async fn set_rank(
+    ctx: &Context, msg: &Message, db: &RwLock<DB>, mid: i64, old_rank: MemberRank, rank: MemberRank,
+) -> CommandResult {
     if old_rank == rank {
         finish!(ctx, msg, "Member is already specified rank");
     }
 
     let caller_rank = {
         let db = db.read().await;
-        let discord_id = ok!(
-            i64::try_from(msg.author.id.0),
-            cmd_bail!("Failed to convert UserId to DiscordId")
-        );
+        let discord_id =
+            ok!(i64::try_from(msg.author.id.0), cmd_bail!("Failed to convert UserId to DiscordId"));
         let mid = some!(
             ctx!(memberdb::get_discord_mid(&db, discord_id).await)?,
             finish!(ctx, msg, "Only a member can use this command")
@@ -587,7 +580,7 @@ pub async fn set_member_rank(ctx: &Context, msg: &Message, mut args: Args) -> Co
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
     let (db, client) = data!(ctx, "db", "reqwest");
 
-    let rank = arg!(ctx, msg, args, MemberRank: "Invalid rank");
+    let rank = arg!(ctx, msg, args, "rank": MemberRank);
 
     let mid = crate::parse_user_target_mid!(ctx, msg, db, client, guild, args.rest());
 
@@ -625,8 +618,7 @@ pub async fn promote_member(ctx: &Context, msg: &Message, args: Args) -> Command
         let db = db.read().await;
         ctx!(memberdb::get_member_rank(&db, mid).await)?
     };
-    let rank = some!(old_rank.promote(),
-        finish!(ctx, msg, "Member is already the highest rank"));
+    let rank = some!(old_rank.promote(), finish!(ctx, msg, "Member is already the highest rank"));
 
     set_rank(&ctx, &msg, &db, mid, old_rank, rank).await
 }
@@ -657,8 +649,7 @@ pub async fn demote_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
         let db = db.read().await;
         ctx!(memberdb::get_member_rank(&db, mid).await)?
     };
-    let rank = some!(old_rank.demote(),
-        finish!(ctx, msg, "Member is already the lowest rank"));
+    let rank = some!(old_rank.demote(), finish!(ctx, msg, "Member is already the lowest rank"));
 
     set_rank(&ctx, &msg, &db, mid, old_rank, rank).await
 }
@@ -683,8 +674,8 @@ pub async fn demote_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
 /// If you use this command with "minimal" as an argument, then the table is displayed without any
 /// styling. Useful if you are viewing it on a small screen.
 async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let filter = option_arg!(ctx, msg, args, MemberFilter: "Invalid filter, see `help members` for help");
-    let is_minimal = flag_arg!(args, "minimal");
+    let filter = arg!(ctx, msg, args, ?"filter": MemberFilter);
+    let is_minimal = flag!(args, "minimal");
 
     let db = data!(ctx, "db");
 
@@ -700,9 +691,12 @@ async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
     let table_data = TableData::paginate(table, header, 10);
 
     if is_minimal {
-        let mut pager = Pager::new(table_data.into_iter().map(|data| {
-            MinimalMembers(data.0)
-        }).collect::<Vec<MinimalMembers>>());
+        let mut pager = Pager::new(
+            table_data
+                .into_iter()
+                .map(|data| MinimalMembers(data.0))
+                .collect::<Vec<MinimalMembers>>(),
+        );
         ctx!(
             msgtool::interact::page(&ctx, &msg.channel_id, &mut pager, 120).await,
             "Error when displaying member list pages"
@@ -727,7 +721,7 @@ async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
 #[example("online Recruiter minimal")]
 /// Display leader board on specified statistic with an optional filter.
 ///
-/// `stat` can be following values: 
+/// `stat` can be following values:
 /// message, weekly_message, voice, weekly_voice, online, weekly_online, xp,
 /// weekly_xp.
 ///
@@ -738,19 +732,20 @@ async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
 /// Rank filters can also be written as `>Captain` to filter for all guild ranks above captain,
 /// or `<Cosmonaut` for all member ranks below cosmonaut.
 ///
-/// If you use this command with "minimal" as an argument, then the leaderboard is displayed without 
+/// If you use this command with "minimal" as an argument, then the leaderboard is displayed without
 /// any styling. Useful if you are viewing it on a small screen.
 async fn stat_leaderboard(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let stat = arg!(ctx, msg, args, Stat: "Invalid stat, see `help lb` for help");
-    let filter = option_arg!(ctx, msg, args, MemberFilter: "Invalid filter, see `help lb` for help");
-    let is_minimal = flag_arg!(args, "minimal");
+    let (stat, filter) = arg!(ctx, msg, args, "stat": Stat, ?"filter": MemberFilter);
+    let is_minimal = flag!(args, "minimal");
 
     let db = data!(ctx, "db");
 
     let (table, header) = {
         let db = db.read().await;
-        ctx!(memberdb::table::stat_leaderboard(&ctx.cache, &db, &stat, &filter, true).await, 
-            "Failed to get stat leader board")?
+        ctx!(
+            memberdb::table::stat_leaderboard(&ctx.cache, &db, &stat, &filter, true).await,
+            "Failed to get stat leader board"
+        )?
     };
     if table.len() == 0 {
         finish!(ctx, msg, "leader board empty");
@@ -758,9 +753,8 @@ async fn stat_leaderboard(ctx: &Context, msg: &Message, mut args: Args) -> Comma
 
     let table_data = TableData::paginate(table, header, 10);
     if is_minimal {
-        let mut pager = Pager::new(table_data.into_iter().map(|data| {
-            MinimalLB(data.0)
-        }).collect::<Vec<MinimalLB>>());
+        let mut pager =
+            Pager::new(table_data.into_iter().map(|data| MinimalLB(data.0)).collect::<Vec<MinimalLB>>());
         ctx!(
             msgtool::interact::page(&ctx, &msg.channel_id, &mut pager, 120).await,
             "Error when displaying stat leader board pages"

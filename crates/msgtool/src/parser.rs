@@ -10,6 +10,7 @@ use tokio::sync::RwLock;
 
 use memberdb::DB;
 use util::discord::PublicChannel;
+use util::ok;
 
 /// A target is a generalization of an object which the bot can act upon
 ///
@@ -38,16 +39,22 @@ impl<'a> TargetObject<'a> {
     pub async fn from_hinted(
         cache_http: &'a impl CacheHttp, db: &RwLock<DB>, client: &Client, guild: &'a Guild, s: &'a str,
     ) -> Result<TargetObject<'a>> {
+        if s.is_empty() {
+            bail!("Target is empty")
+        }
         if let Some((prefix, name)) = s.split_once(':') {
             return Self::parse(cache_http, &db, client, guild, prefix, name).await;
         }
-        bail!("Invalid format for target string")
+        bail!("Invalid format")
     }
 
     /// Parse bot hinted and pinged target string
     pub async fn from_str(
         cache_http: &'a impl CacheHttp, db: &RwLock<DB>, client: &Client, guild: &'a Guild, s: &'a str,
     ) -> Result<TargetObject<'a>> {
+        if s.is_empty() {
+            bail!("Target is empty")
+        }
         // Ping parsing is prioritized
         if let Ok(d_obj) = DiscordObject::parse_ping(cache_http, guild, s).await {
             return Ok(Self::Discord(d_obj));
@@ -74,7 +81,10 @@ impl<'a> TargetObject<'a> {
                 match id {
                     Some(id) => Ok(Self::Mc(id)),
                     None => {
-                        let id = wynn::get_ign_id(client, name).await?;
+                        let id = ok!(
+                            wynn::get_ign_id(client, name).await,
+                            bail!("Failed to find player with given ign")
+                        );
                         Ok(Self::Mc(id))
                     }
                 }
@@ -108,16 +118,22 @@ impl<'a> DiscordObject<'a> {
     pub async fn from_hinted(
         cache_http: &'a impl CacheHttp, guild: &'a Guild, s: &'a str,
     ) -> Result<DiscordObject<'a>> {
+        if s.is_empty() {
+            bail!("Target is empty")
+        }
         if let Some((identifier, s)) = s.split_once(':') {
             return Self::parse(cache_http, guild, identifier, s).await;
         }
-        bail!("Invalid format for target discord string")
+        bail!("Invalid format")
     }
 
     /// Parse both hinted and pinged discord target string
     pub async fn from_str(
         cache_http: &'a impl CacheHttp, guild: &'a Guild, s: &'a str,
     ) -> Result<DiscordObject<'a>> {
+        if s.is_empty() {
+            bail!("Target is empty")
+        }
         // Ping parsing is prioritized
         if let Ok(obj) = Self::parse_ping(cache_http, guild, s).await {
             return Ok(obj);
@@ -143,14 +159,15 @@ impl<'a> DiscordObject<'a> {
                 if let Some(channel_result) = channel_result {
                     return Ok(Self::Channel(channel_result));
                 }
+                bail!("Failed to find linked channel")
             }
             DiscordObjectType::Role => {
                 if let Some(role) = guild.roles.get(&RoleId(id)) {
                     return Ok(Self::Role(role));
                 }
+                bail!("Failed to find pinged role")
             }
         }
-        bail!("Failed to get discord object by id")
     }
 
     /// Parse hinted discord target components: its prefix and target name.
@@ -162,21 +179,24 @@ impl<'a> DiscordObject<'a> {
                 if let Some(member) = util::discord::get_member_named(&cache_http.http(), guild, s).await? {
                     return Ok(Self::Member(member));
                 }
+                bail!("Failed to find member with given name")
             }
             "c" => {
                 let channel = util::discord::get_channel_named(guild, s);
                 if let Some(channel) = channel {
                     return Ok(Self::Channel(channel));
                 }
+                bail!("Failed to find channel/category with given name")
             }
             "r" => {
                 if let Some(role) = guild.role_by_name(s) {
                     return Ok(Self::Role(role));
                 }
+                bail!("Failed to find role with given name")
             }
             _ => {}
         }
-        bail!("Unknown discord target identifier")
+        bail!("Unknown target identifier")
     }
 }
 

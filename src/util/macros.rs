@@ -83,48 +83,6 @@ macro_rules! data {
 }
 
 #[macro_export]
-/// Parse and consume command arg(s) in order
-macro_rules! arg {
-    ($ctx:ident, $msg:ident, $args:ident, $type:ty:$err:literal) => {
-        util::ok!($args.single_quoted::<$type>(), finish!($ctx, $msg, $err))
-    };
-    ($ctx:ident, $msg:ident, $args:ident, $($type:ty:$err:literal),+) => {
-        ($(util::ok!($args.single_quoted::<$type>(), finish!($ctx, $msg, $err)),)+)
-    };
-    ($ctx:ident, $msg:ident, $args:ident, $($type:ty:$err:literal),+, ..) => {
-        ($(util::ok!($args.single_quoted::<$type>(), finish!($ctx, $msg, $err)),)+
-         $args.rest())
-    };
-}
-
-#[macro_export]
-/// Parse and consume optional arg(s)
-macro_rules! option_arg {
-    ($ctx:ident, $msg:ident, $args:ident, $type:ty:$err:literal) => {
-        match $args.find::<$type>() {
-            Ok(v) => Some(v),
-            Err(serenity::framework::standard::ArgError::Eos) => None,
-            _ => finish!($ctx, $msg, $err)
-        }
-    };
-    ($ctx:ident, $msg:ident, $args:ident, $($type:ty:$err:literal),+) => {
-        ($(option_arg!($ctx, $msg, $args, $type:$err),)+)
-    };
-}
-
-#[macro_export]
-/// Find if raw argument(s) exists
-macro_rules! flag_arg {
-    ($args:ident, $flag:literal) => {
-        $args.raw_quoted().collect::<Vec<&str>>().contains(&$flag)
-    };
-    ($args:ident, $($flag:literal),+) => {{
-        let args = $args.raw_quoted().collect::<Vec<&str>>();
-        ($(args.contains(&$flag),)+)
-    }};
-}
-
-#[macro_export]
 /// Send an embed
 macro_rules! send_embed {
     ($ctx:ident, $msg:ident, $embed_builder:expr) => {
@@ -159,10 +117,10 @@ macro_rules! get_profile_ids {
 /// Parse a target expression into `TargetId`
 macro_rules! parse_user_target {
     ($ctx:ident, $msg:ident, $db:ident, $client:ident, $guild:ident, $s:expr) => {{
-        let target = ok!(
-            TargetObject::from_str(&$ctx, &$db, &$client, &$guild, $s).await,
-            finish!($ctx, $msg, format!("invalid target, check `help <command>` for help"))
-        );
+        let target = match TargetObject::from_str(&$ctx, &$db, &$client, &$guild, $s).await {
+            Ok(v) => v,
+            Err(why) => finish!($ctx, $msg, format!("invalid target: {}", why)),
+        };
         match target {
             TargetObject::Discord(DiscordObject::Member(member)) => {
                 crate::util::db::TargetId::Discord(member.as_ref().user.id.clone())

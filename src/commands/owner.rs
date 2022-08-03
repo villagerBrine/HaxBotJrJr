@@ -12,9 +12,7 @@ use crate::{arg, data, finish, send};
 
 #[command]
 async fn sql(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let (db_name, mut query) = arg!(ctx, msg, args,
-        String: "Database name not provided",
-        String: "Query not provided");
+    let (db_name, mut query) = arg!(ctx, msg, args, "database name", "query");
 
     query.push(';');
     let output = Command::new("sqlite3")

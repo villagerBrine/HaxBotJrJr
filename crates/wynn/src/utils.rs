@@ -15,6 +15,8 @@ pub fn is_valid_ign(ign: &str) -> bool {
                 return false;
             }
         }
+    } else {
+        return false;
     }
     true
 }
