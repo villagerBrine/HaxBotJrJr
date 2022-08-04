@@ -68,7 +68,7 @@ where
     fn insert_page(&mut self, page: P) {
         // If page index of too large, then filler items (None) are inserted to pad it out
         if self.index > self.pages.len() {
-            for _ in 0..self.data.len() - self.index {
+            for _ in 0..self.index - self.pages.len() {
                 self.pages.push(None);
             }
         }
