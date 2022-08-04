@@ -1,15 +1,19 @@
+use std::str::FromStr;
+
 use anyhow::{Context as AHContext, Result};
 use serenity::client::{Cache, Context};
 use serenity::model::guild::{Guild, Member as DMember};
 use serenity::model::id::UserId;
 use serenity::model::user::User;
+use sqlx::sqlite::SqliteRow;
 
-use util::{ok, some2};
+use util::{ioerr, ok, some2};
 
 use crate::model::discord::{DiscordId, DiscordProfile};
 use crate::model::guild::GuildProfile;
 use crate::model::member::{Member, MemberId, MemberRank, MEMBER_RANKS};
 use crate::model::wynn::{McId, WynnProfile};
+use crate::query::{Column, Filter, MemberName, QueryAction, QueryBuilder, Selectable, Sort};
 use crate::DB;
 
 /// Get guild role of a user based on `MemberRank::to_string`
@@ -274,5 +278,66 @@ pub async fn is_discord_member(db: &DB, id: &UserId) -> bool {
     match crate::get_discord_mid(db, discord_id).await {
         Ok(Some(_)) => true,
         _ => false,
+    }
+}
+
+#[derive(Debug)]
+/// Wrapper over objects that implements `Selectable`
+pub enum SelectableWrap {
+    Column(Column),
+    MemberName(MemberName),
+}
+
+impl FromStr for SelectableWrap {
+    type Err = std::io::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(col) = Column::from_str(s) {
+            return Ok(Self::Column(col));
+        }
+        if let Ok(name) = MemberName::from_str(s) {
+            return Ok(Self::MemberName(name));
+        }
+        ioerr!("Failed to parse '{}' as Selectables", s)
+    }
+}
+
+impl QueryAction for SelectableWrap {
+    fn apply_action<'a>(&self, builder: &'a mut QueryBuilder) -> &'a mut QueryBuilder {
+        match self {
+            Self::Column(col) => col.apply_action(builder),
+            Self::MemberName(name) => name.apply_action(builder),
+        }
+    }
+}
+
+impl Selectable for SelectableWrap {
+    fn get_formatted(&self, row: &SqliteRow, cache: &Cache) -> String {
+        match self {
+            Self::Column(col) => col.get_formatted(row, cache),
+            Self::MemberName(name) => name.get_formatted(row, cache),
+        }
+    }
+    fn get_table_name(&self) -> &str {
+        match self {
+            Self::Column(col) => col.get_table_name(),
+            Self::MemberName(name) => name.get_table_name(),
+        }
+    }
+}
+
+#[derive(Debug)]
+/// Wrapper over `Filter` and `Sort`
+pub enum FilterSortWrap {
+    Filter(Filter),
+    Sort(Sort),
+}
+
+impl QueryAction for FilterSortWrap {
+    fn apply_action<'a>(&self, builder: &'a mut QueryBuilder) -> &'a mut QueryBuilder {
+        match self {
+            Self::Filter(filter) => filter.apply_action(builder),
+            Self::Sort(sort) => sort.apply_action(builder),
+        }
     }
 }

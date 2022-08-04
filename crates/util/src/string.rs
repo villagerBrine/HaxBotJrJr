@@ -54,7 +54,6 @@ pub fn fmt_second(seconds: i64) -> String {
 /// The string format is similar to the output of `fmt_second`, but without the spaces and ',' is
 /// allowed.
 pub fn parse_second(s: &str) -> Result<u64> {
-    println!("{}", s);
     if s.is_empty() {
         bail!("Empty")
     }

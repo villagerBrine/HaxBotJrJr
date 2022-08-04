@@ -1,13 +1,14 @@
 use anyhow::Context as AHContext;
 use serenity::client::Context;
 use serenity::framework::standard::macros::command;
-use serenity::framework::standard::{Args, CommandResult};
+use serenity::framework::standard::{Args, CommandResult, Delimiter};
 use serenity::model::channel::Message;
 use tokio::sync::RwLock;
 
 use memberdb::events::DBEvent;
 use memberdb::model::member::{MemberId, MemberRank, MemberType, ProfileType};
-use memberdb::query::{Filter, Stat};
+use memberdb::query::{Filter, Sort, Stat};
+use memberdb::utils::{FilterSortWrap, SelectableWrap};
 use memberdb::DB;
 use msgtool::pager::Pager;
 use msgtool::parser::{DiscordObject, TargetObject};
@@ -716,26 +717,7 @@ async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
     }
 
     let header = vec!["IGN".to_string(), "DISCORD".to_string(), "RANK".to_string()];
-    let table_data = TableData::paginate(table, header, 10);
-
-    if is_minimal {
-        let mut pager = Pager::new(
-            table_data
-                .into_iter()
-                .map(|data| MinimalMembers(data.0))
-                .collect::<Vec<MinimalMembers>>(),
-        );
-        ctx!(
-            msgtool::interact::page(&ctx, &msg.channel_id, &mut pager, 120).await,
-            "Error when displaying member list pages"
-        )?;
-    } else {
-        let mut pager = Pager::new(table_data);
-        ctx!(
-            msgtool::interact::page(&ctx, &msg.channel_id, &mut pager, 120).await,
-            "Error when displaying member list pages"
-        )?;
-    };
+    crate::display_table_pages!(ctx, &msg.channel_id, table, header, 10, is_minimal, MinimalMembers);
 
     Ok(())
 }
@@ -804,21 +786,7 @@ async fn stat_leaderboard(ctx: &Context, msg: &Message, mut args: Args) -> Comma
         finish!(ctx, msg, "leaderboard empty");
     }
 
-    let table_data = TableData::paginate(table, header, 10);
-    if is_minimal {
-        let mut pager =
-            Pager::new(table_data.into_iter().map(|data| MinimalLB(data.0)).collect::<Vec<MinimalLB>>());
-        ctx!(
-            msgtool::interact::page(&ctx, &msg.channel_id, &mut pager, 120).await,
-            "Error when displaying stat leaderboard pages"
-        )?;
-    } else {
-        let mut pager = Pager::new(table_data);
-        ctx!(
-            msgtool::interact::page(&ctx, &msg.channel_id, &mut pager, 120).await,
-            "Error when displaying stat leaderboard pages"
-        )?;
-    };
+    crate::display_table_pages!(ctx, &msg.channel_id, table, header, 10, is_minimal, MinimalLB);
 
     Ok(())
 }
@@ -867,6 +835,146 @@ async fn display_member_info(ctx: &Context, msg: &Message, args: Args) -> Comman
     }
 
     finish!(ctx, msg, content)
+}
+
+#[command("table")]
+#[usage("<columns> | [filters] | [sorts] [minimal]")]
+#[example("weekly_xp")]
+#[example("xp minimal")]
+#[example("name message | full")]
+#[example("weekly_voice | >Pilot <online:1w")]
+#[example("ign guild_rank || ^online")]
+#[example("name xp rank | >xp:10,000 voice:1d5h | rank ^xp minimal")]
+/// Display a custom leaderboard.
+///
+/// If you use this command with "minimal" as an argument, then the leaderboard is displayed without
+/// any styling. Useful if you are viewing it on a small screen.
+///
+/// This command has 3 separate argument lists separated by `|`, in order they are:
+/// - __columns__ List of columns in the leaderboard
+/// - __filters__ Filters to be applied
+/// - __sorts__ How to sort the leaderboard
+///
+/// `|` can be omitted if you aren't skipping over any argument lists, ex: "table name xp", "table
+/// name xp | partial".
+/// If you have `sorts` and `filters` is empty, `|` still needs to be included, ex: "table name xp || ^xp".
+///
+/// > **"columns" can be any numbers of the following values separated by space**
+/// `message`, `weekly_message`, `voice`, `weekly_voice`, `online`, `weekly_online`, `xp`,
+/// `weekly_xp` (stats)
+/// `mc_id`, `in_guild` (status on if member is in in-game guild), `ign`, `guild_rank`, `id`, `rank`,
+/// `type`, `name` (member ign or discord username if ign not exist)
+///
+/// > **"filters" can be any numbers of the following values separated by space**
+/// `full`, `partial`, `guild`, `discord`, `wynn` (member type),
+/// `Commander`, `Cosmonaut`, `Architect`, `Pilot`, `Rocketeer`, `Cadet` (member rank),
+/// `Owner`, `Chief`, `Strategist`, `Captain`, `Recruiter`, `Recruit` (guild rank),
+/// `in_guild` (is in guild), `has_mc`, `has_discord` (has linked profile)
+///
+/// Rank filters can also be written as `>Captain` to filter out all guild ranks below Captain,
+/// or `<Cosmonaut` to filter out all member ranks above cosmonaut.
+///
+/// > **"filters" can also contains stat filters**
+/// With just the stat name, it filters out anyone with that stat as 0. Ex `online` filters out
+/// anyone with no online time.
+///
+/// You can also filters for specific stat value by adding it after the name separated by `:`. Ex
+/// `xp:1000` filters out anyone whose xp not equal to 1000.
+///
+/// Similar to rank filters, `>message:10` filters out anyone with message count below 10, and
+/// `<weekly_voice:5m` filters out anyone with weekly voice time greater than 5 minutes. (Note that
+/// the stat value has to be specified for it to work)
+///
+/// > **How to specify stat value**
+/// For stats that is just a plain number (xp and message), you can just specify a number (`1000`).
+/// You can also write `5,000,000` as `5m`, or `10,000,000,000` as `10b`.
+/// Only whole integer is allows, and you can use commas to section up the number (`10,000,000`).
+///
+/// For stats that is a duration of time (voice and online), it can be specified in the format of
+/// `(whole integer)(time unit)`, ex: `10h` is 10 hours.
+/// Following time units are allows: `s` (second), `m` (minute), `h` (hour), `d` (day), and `w`
+/// (week).
+/// Multiple expressions can be chained together, ex: `1w5h20m` is 1 week 5 hours and 20 minutes.
+///
+/// > **"sorts" can be any number of column names separated by space**
+/// With just the column name, that column is ordered in descent order. If `^` is added to the
+/// front (`^xp`), then that column is ordered in ascend order.
+/// Sorts are applied in the order they are specified in.
+async fn display_table(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let is_minimal = flag!(args, "minimal");
+    let arg = args.rest();
+    let mut arg_list = arg.split("|");
+
+    let deli = [Delimiter::Single(' ')];
+    let columns = match arg_list.next() {
+        Some(s) => {
+            let mut args = Args::new(s, &deli);
+            arg::any::<SelectableWrap>(&mut args)
+        }
+        None => Vec::new(),
+    };
+    let filters = match arg_list.next() {
+        Some(s) => {
+            let mut args = Args::new(s, &deli);
+            arg::any::<Filter>(&mut args)
+        }
+        None => Vec::new(),
+    };
+    let sorts = match arg_list.next() {
+        Some(s) => {
+            let mut args = Args::new(s, &deli);
+            arg::any::<Sort>(&mut args)
+        }
+        None => Vec::new(),
+    };
+
+    if columns.is_empty() {
+        finish!(ctx, msg, "No columns specified");
+    }
+    let mut actions = Vec::with_capacity(filters.len() + sorts.len());
+    actions.append(&mut filters.into_iter().map(|f| FilterSortWrap::Filter(f)).collect());
+    actions.append(&mut sorts.into_iter().map(|s| FilterSortWrap::Sort(s)).collect());
+
+    let db = data!(ctx, "db");
+
+    let (table, header) = {
+        let db = db.read().await;
+        ctx!(
+            memberdb::table::make_table(&ctx.cache, &db, &columns, &actions).await,
+            "Failed to get stat leaderboard"
+        )?
+    };
+    if table.len() == 0 {
+        finish!(ctx, msg, "leaderboard empty");
+    }
+
+    crate::display_table_pages!(ctx, &msg.channel_id, table, header, 10, is_minimal, MinimalLB);
+
+    Ok(())
+}
+
+#[macro_export]
+macro_rules! display_table_pages {
+    ($ctx:ident, $channel_id:expr, $data:ident, $header:ident, $page_len:literal, $is_minimal:ident, $minimal_wrap:ident) => {{
+        let table_data = TableData::paginate($data, $header, $page_len);
+        if $is_minimal {
+            let table_data = table_data
+                .into_iter()
+                .map(|data| $minimal_wrap(data.0))
+                .collect::<Vec<$minimal_wrap>>();
+            let mut pager = Pager::new(table_data);
+            ctx!(
+                msgtool::interact::page(&$ctx, $channel_id, &mut pager, 120).await,
+                "Error when displaying leaderboard pages"
+            )?;
+        } else {
+            let mut pager = Pager::new(table_data);
+            ctx!(
+                msgtool::interact::page(&$ctx, $channel_id, &mut pager, 120).await,
+                "Error when displaying leaderboard pages"
+            )?;
+        };
+    }};
 }
 
 async fn existing_wynn_link_check(db: &DB, mid: MemberId) -> Option<String> {

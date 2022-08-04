@@ -1,7 +1,9 @@
 //! Functions that fetches multiple rows from database
 use std::cmp::Ordering;
 
-use crate::query::{Column, Filter, MemberName, QueryBuilder, SelectAction, Selectable, Sort, Stat};
+use crate::query::{
+    Column, Filter, MemberName, QueryAction, QueryBuilder, SelectAction, Selectable, Sort, Stat,
+};
 use crate::DB;
 use anyhow::Result;
 use serenity::client::Cache;
@@ -17,14 +19,12 @@ pub async fn list_members(cache: &Cache, db: &DB, filters: &Vec<Filter>) -> Resu
         .with(&Column::WIgn)
         .with(&Column::MDiscord)
         .with(&Column::MRank)
-        .with(&Sort::new(Column::WIgn, true));
+        .with(&Sort::Asc(Column::WIgn));
 
     for filter in filters {
         query.with(filter);
     }
     let query = query.build();
-
-    println!("{}", query);
 
     let query = sqlx::query(&query).map(|r: SqliteRow| {
         vec![
@@ -62,7 +62,7 @@ pub async fn stat_leaderboard(
 ) -> Result<(Vec<Vec<String>>, Vec<String>)> {
     let stat_col = stat.to_column();
     let mut query = QueryBuilder::new();
-    query.with(stat).with(&Sort::new(stat_col.clone(), false)).with(&MemberName);
+    query.with(stat).with(&Sort::Desc(stat_col.clone())).with(&MemberName);
 
     let zero_filter = Filter::Stat(stat.clone(), 0, Ordering::Equal);
     let mut has_zero_filter = false;
@@ -73,14 +73,14 @@ pub async fn stat_leaderboard(
         query.with(filter);
     }
 
+    // Only filter out entries with stat value of 0 if there isn't a filter that is specifically
+    // looking for stat value of 0.
     if !has_zero_filter {
         query.filter(stat_col.get_ident().to_string());
     }
     query.with(&stat_col.profile().unwrap());
 
     let query = query.build_lb("r");
-
-    println!("{}", query);
 
     let query = sqlx::query(&query).map(|r: SqliteRow| {
         let name = MemberName.get_formatted(&r, &cache);
@@ -90,6 +90,41 @@ pub async fn stat_leaderboard(
     });
     let result = query.fetch_all(&db.pool).await?;
     let header = vec![String::from("#"), String::from("name"), stat_col.get_table_name().to_string()];
+
+    Ok((result, header))
+}
+
+/// Fetch values from the database by specifying what columns to select, and actions (like
+/// filtering and ordering) to apply.
+pub async fn make_table(
+    cache: &Cache, db: &DB, cols: &Vec<impl Selectable>, actions: &Vec<impl QueryAction>,
+) -> Result<(Vec<Vec<String>>, Vec<String>)> {
+    let mut query = QueryBuilder::new();
+    for col in cols {
+        query.with(col);
+    }
+    for action in actions {
+        query.with(action);
+    }
+    let query = query.build_lb("r");
+
+    let query = sqlx::query(&query).map(|r: SqliteRow| {
+        let rank = r.get::<i64, _>("r");
+
+        let mut row = Vec::with_capacity(cols.len() + 1);
+        row.push(rank.to_string());
+        for col in cols {
+            row.push(col.get_formatted(&r, &cache));
+        }
+        row
+    });
+    let result = query.fetch_all(&db.pool).await?;
+
+    let mut header = Vec::with_capacity(cols.len() + 1);
+    header.push(String::from("#"));
+    for col in cols {
+        header.push(col.get_table_name().to_string());
+    }
 
     Ok((result, header))
 }

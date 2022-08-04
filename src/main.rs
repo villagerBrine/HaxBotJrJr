@@ -20,7 +20,7 @@ use haxbotjr::data::BotData;
 struct General;
 
 #[group]
-#[commands(display_profile, stat_leaderboard)]
+#[commands(display_profile, stat_leaderboard, display_table)]
 struct Statistics;
 
 #[group]
