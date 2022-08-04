@@ -1,5 +1,8 @@
 //! String related functions
+use anyhow::{bail, Result};
 use num_format::{Locale, ToFormattedString};
+
+use crate::ok;
 
 /// Join an iterator over &Display into String
 pub fn str_list_iter<'a, I, T>(iter: I) -> String
@@ -47,7 +50,49 @@ pub fn fmt_second(seconds: i64) -> String {
     s
 }
 
-/// Format a number into String, and if number >= 1K, it is formatted in shorthand up to billions
+/// Parse a string into seconds.
+/// The string format is similar to the output of `fmt_second`, but without the spaces and ',' is
+/// allowed.
+pub fn parse_second(s: &str) -> Result<u64> {
+    println!("{}", s);
+    if s.is_empty() {
+        bail!("Empty")
+    }
+
+    let mut seconds = 0;
+    let mut search_buffer = String::new();
+    for c in s.chars() {
+        // ignore ','
+        if c == ',' {
+            continue;
+        }
+
+        if "0123456789".contains(c) {
+            search_buffer.push(c);
+        } else {
+            if search_buffer.is_empty() {
+                bail!("Invalid format")
+            }
+            // Parse collected number
+            let searched_num: u64 = ok!(search_buffer.parse(), bail!("Invalid number '{}'", search_buffer));
+
+            // Parse time unit
+            let multiplier = match c {
+                's' => 1,
+                'm' => 60,
+                'h' => 3600,
+                'd' => 86400,
+                'w' => 604800,
+                _ => bail!("Unknown time unit '{}'", c),
+            };
+            seconds += searched_num * multiplier;
+        }
+    }
+
+    Ok(seconds)
+}
+
+/// Format a number into String, and if number >= 1M, it is formatted in shorthand up to billions
 pub fn fmt_num(num: i64, shorthand: bool) -> String {
     if shorthand && num >= 1_000_000 {
         return if num >= 1_000_000_000 {
@@ -57,10 +102,30 @@ pub fn fmt_num(num: i64, shorthand: bool) -> String {
         } else {
             let mut num = (num / 10_000) as f64;
             num = num / 100.0;
-            format!("{}K", num)
+            format!("{}M", num)
         };
     }
     num.to_formatted_string(&Locale::en)
+}
+
+/// Parse a string into number.
+/// The string format is similar to the output of `fmt_num`.
+/// String can ends with 'b' or 'k', and can contain ','.
+pub fn parse_num(s: &str) -> Result<i64> {
+    if s.is_empty() {
+        bail!("empty")
+    }
+
+    let (s, multiplier) = if s.ends_with('b') {
+        (&s[..s.len() - 1], 1_000_000_000)
+    } else if s.ends_with('m') {
+        (&s[..s.len() - 1], 1_000_000)
+    } else {
+        (s, 1)
+    };
+
+    let num: i64 = ok!(s.replace(',', "").parse(), bail!("Invalid number"));
+    Ok(num * multiplier)
 }
 
 #[macro_export]

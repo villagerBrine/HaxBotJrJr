@@ -97,6 +97,8 @@ pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Co
             {
                 let mut xp_buffer = shared_xp_buffer.lock().unwrap();
                 for (ign, diff, xp) in xp_buffer.values() {
+                    let diff = util::string::fmt_num(*diff, false);
+                    let xp = util::string::fmt_num(*xp, true);
                     let log = format!("**{}** contributed __{}__ xp, total *{}* xp", ign, diff, xp);
                     log_buffer.push('\n');
                     log_buffer.push_str(&log);

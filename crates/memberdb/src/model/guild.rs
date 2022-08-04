@@ -9,15 +9,24 @@ use crate::model::member::{MemberId, MemberRank};
 use crate::model::wynn::McId;
 use crate::DB;
 
-#[derive(Debug, Copy, Clone)]
+pub const GUILD_RANKS: [GuildRank; 6] = [
+    GuildRank::Owner,
+    GuildRank::Chief,
+    GuildRank::Strategist,
+    GuildRank::Captain,
+    GuildRank::Recruiter,
+    GuildRank::Recruit,
+];
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 /// In-game guild ranks
 pub enum GuildRank {
-    Owner,
-    Chief,
-    Strategist,
-    Captain,
-    Recruiter,
     Recruit,
+    Recruiter,
+    Captain,
+    Strategist,
+    Chief,
+    Owner,
 }
 
 impl_sqlx_type!(GuildRank);

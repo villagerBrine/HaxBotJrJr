@@ -17,13 +17,13 @@ pub type MemberId = i64;
 /// The lower the number the higher the rank.
 /// They are named this way so that when rank names are changed, no refactoring is needed.
 pub enum MemberRank {
-    Zero,
-    One,
-    Two,
-    Three,
-    Four,
-    Five,
     Six,
+    Five,
+    Four,
+    Three,
+    Two,
+    One,
+    Zero,
 }
 
 pub const MEMBER_RANKS: [MemberRank; 7] = [
@@ -162,7 +162,7 @@ impl FromStr for MemberRank {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 /// Types of member
 pub enum MemberType {
     Full,

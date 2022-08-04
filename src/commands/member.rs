@@ -7,7 +7,7 @@ use tokio::sync::RwLock;
 
 use memberdb::events::DBEvent;
 use memberdb::model::member::{MemberId, MemberRank, MemberType, ProfileType};
-use memberdb::table::{MemberFilter, Stat};
+use memberdb::query::{Filter, Stat};
 use memberdb::DB;
 use msgtool::pager::Pager;
 use msgtool::parser::{DiscordObject, TargetObject};
@@ -15,6 +15,7 @@ use msgtool::table::TableData;
 use util::{ctx, ok, some};
 
 use crate::checks::{MAINSERVER_CHECK, STAFF_CHECK};
+use crate::util::arg;
 use crate::util::db::TargetId;
 use crate::util::discord::{MinimalLB, MinimalMembers};
 use crate::{arg, cmd_bail, data, finish, flag, send, send_embed};
@@ -655,33 +656,60 @@ pub async fn demote_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
 }
 
 #[command("members")]
-#[usage("[filter] [minimal]")]
+#[usage("[filters] [minimal]")]
 #[example("")]
 #[example("minimal")]
 #[example("Chief")]
-#[example("guild")]
-#[example("<Pilot")]
-#[example(">Strategist minimal")]
-/// List members with an optional filter.
-///
-/// `filter` can be following values:
-/// full, partial, guild, discord, wynn, Commander, Cosmonaut, Architect, Pilot, Rocketeer, Cadet,
-/// Owner, Chief, Strategist, Captain, Recruiter, Recruit.
-///
-/// Rank filters can also be written as `>Captain` to filter for all guild ranks above captain,
-/// or `<Cosmonaut` for all member ranks below cosmonaut.
+#[example("guild >weekly_voice:1h")]
+#[example("<Pilot xp")]
+#[example(">Strategist <online:1w3d >xp:12m minimal")]
+/// List members with optional filters.
 ///
 /// If you use this command with "minimal" as an argument, then the table is displayed without any
 /// styling. Useful if you are viewing it on a small screen.
+///
+/// > **"filters" can be any numbers of the following values separated by space**
+/// `full`, `partial`, `guild`, `discord`, `wynn` (member type),
+/// `Commander`, `Cosmonaut`, `Architect`, `Pilot`, `Rocketeer`, `Cadet` (member rank),
+/// `Owner`, `Chief`, `Strategist`, `Captain`, `Recruiter`, `Recruit` (guild rank),
+/// `in_guild` (is in guild), `has_mc`, `has_discord` (has linked profile)
+///
+/// Rank filters can also be written as `>Captain` to filter out all guild ranks below Captain,
+/// or `<Cosmonaut` to filter out all member ranks above cosmonaut.
+///
+/// > **"filters" can also contains stat filters**
+/// Following stats can be filtered: `message`, `weekly_message`, `voice`, `weekly_voice`, `online`,
+/// `weekly_online`, `xp`, `weekly_xp`.
+///
+/// With just the stat name, it filters out anyone with that stat as 0. Ex `online` filters out
+/// anyone with no online time.
+///
+/// You can also filters for specific stat value by adding it after the name separated by `:`. Ex
+/// `xp:1000` filters out anyone whose xp not equal to 1000.
+///
+/// Similar to rank filters, `>message:10` filters out anyone with message count below 10, and
+/// `<weekly_voice:5m` filters out anyone with weekly voice time greater than 5 minutes. (Note that
+/// the stat value has to be specified for it to work)
+///
+/// > **How to specify stat value**
+/// For stats that is just a plain number (xp and message), you can just specify a number (`1000`).
+/// You can also write `5,000,000` as `5m`, or `10,000,000,000` as `10b`.
+/// Only whole integer is allows, and you can use commas to section up the number (`10,000,000`).
+///
+/// For stats that is a duration of time (voice and online), it can be specified in the format of
+/// `(whole integer)(time unit)`, ex: `10h` is 10 hours.
+/// Following time units are allows: `s` (second), `m` (minute), `h` (hour), `d` (day), and `w`
+/// (week).
+/// Multiple expressions can be chained together, ex: `1w5h20m` is 1 week 5 hours and 20 minutes.
 async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let filter = arg!(ctx, msg, args, ?"filter": MemberFilter);
+    let filters = arg::any::<Filter>(&mut args);
     let is_minimal = flag!(args, "minimal");
 
     let db = data!(ctx, "db");
 
     let table = {
         let db = db.read().await;
-        ctx!(memberdb::table::list_members(&ctx.cache, &db, filter).await, "Failed to get members list")?
+        ctx!(memberdb::table::list_members(&ctx.cache, &db, &filters).await, "Failed to get members list")?
     };
     if table.len() == 0 {
         finish!(ctx, msg, "Found 0 member");
@@ -713,29 +741,54 @@ async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
 }
 
 #[command("lb")]
-#[usage("<stat> [filter] [minimal]")]
+#[usage("<stat> [filters] [minimal]")]
 #[example("weekly_xp")]
 #[example("xp minimal")]
 #[example("message full")]
-#[example("weekly_voice >Pilot")]
-#[example("online Recruiter minimal")]
-/// Display leader board on specified statistic with an optional filter.
-///
-/// `stat` can be following values:
-/// message, weekly_message, voice, weekly_voice, online, weekly_online, xp,
-/// weekly_xp.
-///
-/// `filter` can be following values:
-/// full, partial, guild, discord, wynn, Commander, Cosmonaut, Architect, Pilot, Rocketeer, Cadet,
-/// Owner, Chief, Strategist, Captain, Recruiter, Recruit.
-///
-/// Rank filters can also be written as `>Captain` to filter for all guild ranks above captain,
-/// or `<Cosmonaut` for all member ranks below cosmonaut.
+#[example("weekly_voice >Pilot <online:1w")]
+#[example("online Recruiter >xp:10,000 voice:1d5h minimal")]
+/// Display leaderboard on specified statistic with optional filters.
 ///
 /// If you use this command with "minimal" as an argument, then the leaderboard is displayed without
 /// any styling. Useful if you are viewing it on a small screen.
+///
+/// > **"stat" can be following values:**
+/// `message`, `weekly_message`, `voice`, `weekly_voice`, `online`, `weekly_online`, `xp`,
+/// `weekly_xp`.
+///
+/// > **"filters" can be any numbers of the following values separated by space**
+/// `full`, `partial`, `guild`, `discord`, `wynn` (member type),
+/// `Commander`, `Cosmonaut`, `Architect`, `Pilot`, `Rocketeer`, `Cadet` (member rank),
+/// `Owner`, `Chief`, `Strategist`, `Captain`, `Recruiter`, `Recruit` (guild rank),
+/// `in_guild` (is in guild), `has_mc`, `has_discord` (has linked profile)
+///
+/// Rank filters can also be written as `>Captain` to filter out all guild ranks below Captain,
+/// or `<Cosmonaut` to filter out all member ranks above cosmonaut.
+///
+/// > **"filters" can also contains stat filters**
+/// With just the stat name, it filters out anyone with that stat as 0. Ex `online` filters out
+/// anyone with no online time.
+///
+/// You can also filters for specific stat value by adding it after the name separated by `:`. Ex
+/// `xp:1000` filters out anyone whose xp not equal to 1000.
+///
+/// Similar to rank filters, `>message:10` filters out anyone with message count below 10, and
+/// `<weekly_voice:5m` filters out anyone with weekly voice time greater than 5 minutes. (Note that
+/// the stat value has to be specified for it to work)
+///
+/// > **How to specify stat value**
+/// For stats that is just a plain number (xp and message), you can just specify a number (`1000`).
+/// You can also write `5,000,000` as `5m`, or `10,000,000,000` as `10b`.
+/// Only whole integer is allows, and you can use commas to section up the number (`10,000,000`).
+///
+/// For stats that is a duration of time (voice and online), it can be specified in the format of
+/// `(whole integer)(time unit)`, ex: `10h` is 10 hours.
+/// Following time units are allows: `s` (second), `m` (minute), `h` (hour), `d` (day), and `w`
+/// (week).
+/// Multiple expressions can be chained together, ex: `1w5h20m` is 1 week 5 hours and 20 minutes.
 async fn stat_leaderboard(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let (stat, filter) = arg!(ctx, msg, args, "stat": Stat, ?"filter": MemberFilter);
+    let stat = arg!(ctx, msg, args, "stat": Stat);
+    let filters = arg::any::<Filter>(&mut args);
     let is_minimal = flag!(args, "minimal");
 
     let db = data!(ctx, "db");
@@ -743,12 +796,12 @@ async fn stat_leaderboard(ctx: &Context, msg: &Message, mut args: Args) -> Comma
     let (table, header) = {
         let db = db.read().await;
         ctx!(
-            memberdb::table::stat_leaderboard(&ctx.cache, &db, &stat, &filter, true).await,
-            "Failed to get stat leader board"
+            memberdb::table::stat_leaderboard(&ctx.cache, &db, &stat, &filters).await,
+            "Failed to get stat leaderboard"
         )?
     };
     if table.len() == 0 {
-        finish!(ctx, msg, "leader board empty");
+        finish!(ctx, msg, "leaderboard empty");
     }
 
     let table_data = TableData::paginate(table, header, 10);
@@ -757,13 +810,13 @@ async fn stat_leaderboard(ctx: &Context, msg: &Message, mut args: Args) -> Comma
             Pager::new(table_data.into_iter().map(|data| MinimalLB(data.0)).collect::<Vec<MinimalLB>>());
         ctx!(
             msgtool::interact::page(&ctx, &msg.channel_id, &mut pager, 120).await,
-            "Error when displaying stat leader board pages"
+            "Error when displaying stat leaderboard pages"
         )?;
     } else {
         let mut pager = Pager::new(table_data);
         ctx!(
             msgtool::interact::page(&ctx, &msg.channel_id, &mut pager, 120).await,
-            "Error when displaying stat leader board pages"
+            "Error when displaying stat leaderboard pages"
         )?;
     };
 

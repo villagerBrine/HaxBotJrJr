@@ -28,12 +28,12 @@ use tracing::{info, instrument, warn};
 use util::ctx;
 
 use crate::api::fetch::*;
-use crate::api::table::Stat;
 use crate::events::DBEvent;
 use crate::model::discord::DiscordId;
 use crate::model::guild::GuildRank;
 use crate::model::member::{MemberId, MemberRank, MemberType};
 use crate::model::wynn::McId;
+use crate::query::Stat;
 use crate::{Transaction, DB};
 
 /// Add discord partial member, if profile doesn't exist, it is created.
@@ -213,10 +213,11 @@ pub async fn update_member_rank(tx: &mut Transaction, mid: MemberId, rank: Membe
 
 /// Reset weekly stats to 0
 pub async fn weekly_reset(db: &DB, cache: &Cache) -> Result<()> {
-    let message_lb = crate::table::stat_leaderboard(cache, db, &Stat::Message(true), &None, true).await?;
-    let voice_lb = crate::table::stat_leaderboard(cache, db, &Stat::Voice(true), &None, true).await?;
-    let online_lb = crate::table::stat_leaderboard(cache, db, &Stat::Online(true), &None, true).await?;
-    let xp_lb = crate::table::stat_leaderboard(cache, db, &Stat::Xp(true), &None, true).await?;
+    let v = Vec::new();
+    let message_lb = crate::table::stat_leaderboard(cache, db, &Stat::WeeklyMessage, &v).await?;
+    let voice_lb = crate::table::stat_leaderboard(cache, db, &Stat::WeeklyVoice, &v).await?;
+    let online_lb = crate::table::stat_leaderboard(cache, db, &Stat::WeeklyOnline, &v).await?;
+    let xp_lb = crate::table::stat_leaderboard(cache, db, &Stat::WeeklyXp, &v).await?;
 
     // Transaction isn't used because the following queries aren't related and the WeeklyReset
     // event needs to be broadcasted regardless of error.

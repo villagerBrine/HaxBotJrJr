@@ -120,6 +120,7 @@ pub fn make_page_indicator(page_index: usize, page_num: usize) -> String {
 
 /// Data needed to create a table.
 /// Can be formatted into a table via `ToPage`
+#[derive(Debug)]
 pub struct TableData(pub Vec<Vec<String>>);
 
 impl TableData {
