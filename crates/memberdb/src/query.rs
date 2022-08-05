@@ -60,7 +60,7 @@ impl Column {
             Self::DWeeklyMessage => "message_week",
             Self::DVoice => "voice",
             Self::DWeeklyVoice => "voice_week",
-            Self::WGuild => "in_guild",
+            Self::WGuild => "guild",
             Self::WIgn => "ign",
             Self::WOnline => "activity",
             Self::WWeeklyOnline => "activity_week",
@@ -114,7 +114,9 @@ impl Selectable for Column {
         let ident = self.get_ident();
         match self {
             // Columns of type String
-            Self::MId | Self::MType => row.get(ident),
+            Self::MType => row.get(ident),
+            // Columns of type Number
+            Self::MId => row.get::<i64, _>(ident).to_string(),
             // Columns of type Option<String>
             Self::MDiscord | Self::WIgn | Self::MMcid | Self::GRank => {
                 row.get::<Option<String>, _>(ident).unwrap_or(String::new())

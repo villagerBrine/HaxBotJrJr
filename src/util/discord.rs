@@ -102,13 +102,9 @@ impl ToPage for MinimalLB {
             1 => {
                 row_s.push_str(" **");
                 row_s.push_str(s);
-                row_s.push_str("**");
+                row_s.push_str("** ");
             }
-            _ => {
-                row_s.push_str(" `");
-                row_s.push_str(s);
-                row_s.push('`');
-            }
+            _ => push_empty_or(row_s, s),
         })
     }
 }
