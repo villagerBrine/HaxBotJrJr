@@ -51,8 +51,6 @@ pub struct GuildMember {
     pub joined_friendly: String,
 }
 
-pub type MemberMap = HashMap<String, GuildMember>;
-
 pub type ServerList = HashMap<String, serde_json::Value>;
 
 pub const IG_RANKS: [&str; 6] = ["OWNER", "CHIEF", "STRATEGIST", "CAPTAIN", "RECRUITER", "RECRUIT"];

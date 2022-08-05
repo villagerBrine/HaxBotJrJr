@@ -32,7 +32,10 @@ fn make_wynn_log(event: &WynnEvent) -> Option<String> {
         }
         WynnEvent::GuildLevelUp { level } => format!("**Guild leveled up to** __{}__", level),
         WynnEvent::PlayerJoin { ign, world } => format!("**{}** logged in at __{}__", ign, world),
-        WynnEvent::PlayerLeave { ign } => format!("**{}** logged off", ign),
+        WynnEvent::PlayerMove { ign, old_world, new_world } => {
+            format!("**{}** moved from __{}__ to __{}__", ign, old_world, new_world)
+        }
+        WynnEvent::PlayerLeave { ign, world } => format!("**{}** logged off from __{}__", ign, world),
         _ => return None,
     })
 }
@@ -52,7 +55,9 @@ fn get_log_channel_tag(event: &WynnEvent) -> Option<TextChannelTag> {
         | WynnEvent::MemberNameChange { .. } => TextChannelTag::GuildMemberLog,
         WynnEvent::GuildLevelUp { .. } => TextChannelTag::GuildLevelLog,
         WynnEvent::MemberContribute { .. } => TextChannelTag::XpLog,
-        WynnEvent::PlayerJoin { .. } | WynnEvent::PlayerLeave { .. } => TextChannelTag::OnlineLog,
+        WynnEvent::PlayerJoin { .. } | WynnEvent::PlayerLeave { .. } | WynnEvent::PlayerMove { .. } => {
+            TextChannelTag::OnlineLog
+        }
         _ => return None,
     })
 }

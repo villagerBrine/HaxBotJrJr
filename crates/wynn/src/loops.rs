@@ -17,14 +17,15 @@ use crate::model::{Guild, GuildMember, ServerList};
 pub async fn start_loops(signal: WynnSignal, client: Client, cache: Arc<Cache>, db: Arc<RwLock<DB>>) {
     let shared_signal = signal.clone();
     let shared_client = client.clone();
+    let shared_cache = cache.clone();
     tokio::spawn(async move {
         // This is to make sure wynn events are sent after receivers are created
         std::thread::sleep(std::time::Duration::from_secs(5));
-        main_guild_api_loop(shared_signal, &shared_client, &cache).await;
+        main_guild_api_loop(shared_signal, &shared_client, &shared_cache).await;
     });
 
     tokio::spawn(async move {
-        server_api_loop(signal, &client, &db).await;
+        server_api_loop(signal, &client, &db, &cache).await;
     });
 }
 
@@ -176,12 +177,10 @@ fn get_member_events(old: &GuildMember, new: &GuildMember) -> Vec<WynnEvent> {
 }
 
 /// Analyze server online players and broadcast `WynnEvent`
-async fn server_api_loop(signal: WynnSignal, client: &Client, db: &RwLock<DB>) {
-    let mut interval = time::interval(Duration::from_millis(60000));
+async fn server_api_loop(signal: WynnSignal, client: &Client, db: &RwLock<DB>, cache: &Cache) {
+    let mut interval = time::interval(Duration::from_secs(60));
     let mut prev_timestamp: u64 = 0;
-    // This set contains all igns that is currently tracking, meaning they are a member in the
-    // database and was online
-    let mut tracked_ign: Option<HashSet<String>> = None;
+    let mut first_loop = true;
 
     let url = "https://api.wynncraft.com/public_api.php?action=onlinePlayers";
 
@@ -242,68 +241,79 @@ async fn server_api_loop(signal: WynnSignal, client: &Client, db: &RwLock<DB>) {
             }
         };
 
-        let mut is_cache_empty = false;
-        {
-            if let Some(ref mut tracked_ign) = tracked_ign {
-                for (world, igns) in iter_ign(&resp) {
-                    for ign in igns {
-                        // Filter out igns that can't be tracked, aka not in database
-                        if all_igns.contains(ign) {
-                            match tracked_ign.get(ign) {
-                                Some(_) => {
-                                    // Player was online previously
-                                    // Update online time as the elapsed time from previous loop
-                                    if elapsed > 0 {
-                                        events.push(WynnEvent::PlayerStay {
-                                            ign: ign.to_string(),
-                                            world: world.clone(),
-                                            elapsed,
-                                        });
-                                    }
-                                }
-                                None => {
-                                    // Player just logged on as they aren't online during previous loop
-                                    // Add to tracked ign
-                                    info!(ign, world, "player join");
-                                    tracked_ign.insert(ign.to_string());
-                                    events.push(WynnEvent::PlayerJoin {
-                                        ign: ign.to_string(),
-                                        world: world.clone(),
-                                    });
-                                }
-                            }
-                            // Remove online ign from it, so all it lefts are track-able igns that
-                            // are offline
-                            all_igns.remove(ign);
-                        }
-                    }
-                }
-            } else {
-                is_cache_empty = true;
-            }
-        }
-
-        if is_cache_empty {
+        if first_loop {
             // initialize `tracked_ign`
-            let mut online_igns = HashSet::new();
-            for (_, igns) in iter_ign(&resp) {
+            let mut tracked_ign = cache.online.write().await;
+            for (world, igns) in iter_ign(&resp) {
                 for ign in igns {
                     if all_igns.contains(ign) {
-                        online_igns.insert(ign.to_string());
+                        tracked_ign.insert(world.clone(), ign.to_string());
                     }
                 }
             }
-            tracked_ign = Some(online_igns);
+            first_loop = false;
             continue;
         }
 
-        if let Some(ref mut tracked_ign) = tracked_ign {
-            // `all_igns` now contains all offline igns
-            for ign in all_igns {
-                if tracked_ign.remove(&ign) {
-                    info!(ign, "player leave");
-                    events.push(WynnEvent::PlayerLeave { ign });
+        {
+            let mut tracked_ign = cache.online.write().await;
+            for (world, igns) in iter_ign(&resp) {
+                for ign in igns {
+                    // Filter out igns that can't be tracked, aka not in database
+                    if all_igns.contains(ign) {
+                        match tracked_ign.get_world(ign) {
+                            Some(old_world) => {
+                                // Player was online previously
+                                // Update online time as the elapsed time from previous loop
+                                if elapsed > 0 {
+                                    events.push(WynnEvent::PlayerStay {
+                                        ign: ign.to_string(),
+                                        world: world.clone(),
+                                        elapsed,
+                                    });
+                                }
+                                if world != old_world {
+                                    info!(ign, old_world, world, "player move");
+                                    events.push(WynnEvent::PlayerMove {
+                                        ign: ign.to_string(),
+                                        old_world: old_world.to_string(),
+                                        new_world: world.clone(),
+                                    });
+                                }
+                            }
+                            None => {
+                                // Player just logged on as they aren't online during previous loop
+                                // Add to tracked ign
+                                info!(ign, world, "player join");
+                                tracked_ign.insert(world.clone(), ign.to_string());
+                                events.push(WynnEvent::PlayerJoin {
+                                    ign: ign.to_string(),
+                                    world: world.clone(),
+                                });
+                            }
+                        }
+                        // Remove online ign from it, so all it lefts are track-able igns that
+                        // are offline
+                        all_igns.remove(ign);
+                    }
                 }
+            }
+
+            // `all_igns` now contains all offline igns
+            let mut empty_worlds = Vec::new();
+            for ign in all_igns {
+                if let Some((world, is_empty)) = tracked_ign.remove(&ign) {
+                    info!(ign, "player leave");
+                    if is_empty {
+                        empty_worlds.push(world.to_string());
+                    }
+                    events.push(WynnEvent::PlayerLeave { ign, world: world.to_string() });
+                }
+            }
+
+            // Remove empty worlds
+            for world in &empty_worlds {
+                tracked_ign.0.remove(world);
             }
         }
 

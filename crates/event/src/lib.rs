@@ -79,8 +79,14 @@ pub enum WynnEvent {
         world: String,
         elapsed: u64,
     },
+    PlayerMove {
+        ign: String,
+        old_world: String,
+        new_world: String,
+    },
     PlayerLeave {
         ign: String,
+        world: String,
     },
 }
 

@@ -170,7 +170,7 @@ impl Tag for TextChannelTag {
             Self::GuildMemberLog => "Logs guild member join, leave, and rank / ign change",
             Self::GuildLevelLog => "Logs guild level up",
             Self::XpLog => "Logs guild member xp contributions",
-            Self::OnlineLog => "Logs player join / leave, world change not logged",
+            Self::OnlineLog => "Logs player join / leave and world change",
             Self::Summary => "Stat leaderboards are posted weekly",
         }
     }
