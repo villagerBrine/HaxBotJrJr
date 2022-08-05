@@ -13,10 +13,11 @@ use haxbotjr::commands::member::*;
 use haxbotjr::commands::meta::*;
 use haxbotjr::commands::owner::*;
 use haxbotjr::commands::staff_util::*;
+use haxbotjr::commands::wynn::*;
 use haxbotjr::data::BotData;
 
 #[group]
-#[commands(ping, set_custom_nick)]
+#[commands(ping, set_custom_nick, display_online_players)]
 struct General;
 
 #[group]

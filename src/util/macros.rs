@@ -75,9 +75,15 @@ macro_rules! data {
         }
     };
     (INTERNAL; "vc", $data:ident) => {
-        match $data.get::<crate::data::VoiceTrackerContainer>() {
+        match $data.get::<memberdb::voice_tracker::VoiceTrackerContainer>() {
             Some(v) => v.clone(),
             None => crate::cmd_bail!("Failed to access vc tracker"),
+        }
+    };
+    (INTERNAL; "cache", $data:ident) => {
+        match $data.get::<wynn::cache::WynnCacheContainer>() {
+            Some(v) => v.clone(),
+            None => crate::cmd_bail!("Failed to access wynn cache"),
         }
     };
 }
