@@ -1,7 +1,7 @@
 use anyhow::Context as AHContext;
 use serenity::client::Context;
 use serenity::framework::standard::macros::command;
-use serenity::framework::standard::{Args, CommandResult, Delimiter};
+use serenity::framework::standard::{Args, CommandResult};
 use serenity::model::channel::Message;
 use tokio::sync::RwLock;
 
@@ -704,7 +704,7 @@ pub async fn demote_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
 /// Multiple expressions can be chained together, ex: `1w5h20m` is 1 week 5 hours and 20 minutes.
 async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let filters = arg::any::<Filter>(&mut args);
-    let is_minimal = flag!(args, "minimal");
+    let is_minimal = flag!(ctx, msg, args, "minimal");
 
     let db = data!(ctx, "db");
 
@@ -771,7 +771,7 @@ async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
 async fn stat_leaderboard(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let stat = arg!(ctx, msg, args, "stat": Stat);
     let filters = arg::any::<Filter>(&mut args);
-    let is_minimal = flag!(args, "minimal");
+    let is_minimal = flag!(ctx, msg, args, "minimal");
 
     let db = data!(ctx, "db");
 
@@ -900,33 +900,13 @@ async fn display_member_info(ctx: &Context, msg: &Message, args: Args) -> Comman
 /// With just the column name, that column is ordered in descent order. If `^` is added to the
 /// front (`^xp`), then that column is ordered in ascend order.
 /// Sorts are applied in the order they are specified in.
-async fn display_table(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let is_minimal = flag!(args, "minimal");
-    let arg = args.rest();
-    let mut arg_list = arg.split("|");
-
-    let deli = [Delimiter::Single(' ')];
-    let columns = match arg_list.next() {
-        Some(s) => {
-            let mut args = Args::new(s, &deli);
-            arg::any::<SelectableWrap>(&mut args)
-        }
-        None => Vec::new(),
-    };
-    let filters = match arg_list.next() {
-        Some(s) => {
-            let mut args = Args::new(s, &deli);
-            arg::any::<Filter>(&mut args)
-        }
-        None => Vec::new(),
-    };
-    let sorts = match arg_list.next() {
-        Some(s) => {
-            let mut args = Args::new(s, &deli);
-            arg::any::<Sort>(&mut args)
-        }
-        None => Vec::new(),
-    };
+async fn display_table(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let columns = arg::any::<SelectableWrap>(&mut args);
+    arg::consume_raw(&mut args, "|");
+    let filters = arg::any::<Filter>(&mut args);
+    arg::consume_raw(&mut args, "|");
+    let sorts = arg::any::<Sort>(&mut args);
+    let is_minimal = flag!(ctx, msg, args, "minimal");
 
     if columns.is_empty() {
         finish!(ctx, msg, "No columns specified");

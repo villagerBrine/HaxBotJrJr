@@ -572,7 +572,7 @@ pub trait SelectAction: Selectable {
 pub struct QueryBuilder {
     select_tokens: HashSet<String>,
     where_tokens: HashSet<String>,
-    order_tokens: HashSet<String>,
+    order_tokens: Vec<String>,
 }
 
 impl QueryBuilder {
@@ -580,7 +580,7 @@ impl QueryBuilder {
         Self {
             select_tokens: HashSet::new(),
             where_tokens: HashSet::new(),
-            order_tokens: HashSet::new(),
+            order_tokens: Vec::new(),
         }
     }
 
@@ -598,7 +598,9 @@ impl QueryBuilder {
 
     /// Add a "order by" expression
     pub fn order(&mut self, token: String) -> &mut Self {
-        self.order_tokens.insert(token);
+        if !self.order_tokens.contains(&token) {
+            self.order_tokens.push(token);
+        }
         self
     }
 

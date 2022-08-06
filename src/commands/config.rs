@@ -64,6 +64,7 @@ async fn describe_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandRe
 /// - __Role__: "r:<role name>", ex: "r:Mission Specialist"
 async fn add_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
+
     let tag = arg!(ctx, msg, args, "tag": TagWrap);
     let target_arg = args.rest();
 
@@ -137,6 +138,7 @@ async fn add_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
 /// - __Role__: "r:<role name>", ex: "r:Mission Specialist"
 async fn remove_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
+
     let tag = arg!(ctx, msg, args, "tag": TagWrap);
     let target_arg = args.rest();
 
