@@ -1,5 +1,11 @@
 #[macro_export]
 /// Reply to message sender and exit command.
+///
+/// Examples
+/// ```
+/// finish!(ctx, msg, "done");
+/// finish!(ctx, msg, "Error: {:#}", why);
+/// ```
 macro_rules! finish {
     ($ctx:ident, $sender:expr, $content:expr) => {{
         crate::send!($ctx, $sender, $content);
@@ -13,6 +19,12 @@ macro_rules! finish {
 
 #[macro_export]
 /// Reply to message sender
+///
+/// Examples
+/// ```
+/// send!(ctx, msg, "processing...");
+/// send!(ctx, msg, "Reading {}/{} object", index, size);
+/// ```
 macro_rules! send {
     ($ctx:ident, $sender:expr, $content:expr) => {
         $sender.reply(&$ctx, $content).await.map_err(|why| {
@@ -29,7 +41,7 @@ macro_rules! send {
 }
 
 #[macro_export]
-/// anyhow::anyhow! shortcut
+/// like `anyhow::bail!` but works with `CommandResult`
 macro_rules! cmd_bail {
     ($msg:literal $(,)?) => {
         return Err(anyhow::anyhow!($msg).into())
@@ -40,7 +52,21 @@ macro_rules! cmd_bail {
 }
 
 #[macro_export]
-/// Get item(s) from Context.data
+/// Get bot data from `Context`.
+///
+/// Each data is represented by a string literal:
+/// - "config": `Arc<RwLock<config::Config>>`
+/// - "db": `Arc<RwLock<memberdb::DB>>`
+/// - "shard": `Arc<Mutex<ShardManager>>`
+/// - "reqwest": `reqwest::Client`
+/// - "vc": `Arc<Mutex<VoiceTracker>>`
+/// - "cache": `Arc<Cache>`
+///
+/// Examples
+/// ```
+/// let db = data!(ctx, "db");
+/// let (config, client) = data!(ctx, "config", "reqwest");
+/// ```
 macro_rules! data {
     ($ctx:ident, $name:tt) => {{
         let data = $ctx.data.read().await;
@@ -89,7 +115,14 @@ macro_rules! data {
 }
 
 #[macro_export]
-/// Send an embed
+/// Send an embed.
+/// Example
+/// ```
+/// send_embed!(ctx, msg, |e: CreateEmbed| {
+///     e.title("This is a title")
+///         .field("a", "b", false)
+/// });
+/// ```
 macro_rules! send_embed {
     ($ctx:ident, $msg:ident, $embed_builder:expr) => {
         $msg.channel_id
@@ -100,7 +133,13 @@ macro_rules! send_embed {
 }
 
 #[macro_export]
-/// Get discord id and mc id via discord name and ign
+/// Get discord id and mc id via discord name and ign.
+/// A discord member is also returned in case if you needs it.
+/// Example
+/// ```
+/// let (member, discord_id, mcid): (Member, i64, String) = get_profile_ids!(
+///     ctx, msg, guild, "MyDiscordName", "ign");
+/// ```
 macro_rules! get_profile_ids {
     ($ctx:ident, $msg:ident, $guild:ident, $client:ident, $discord_name:ident, $ign:ident) => {{
         let discord_member = util::some!(
@@ -121,6 +160,12 @@ macro_rules! get_profile_ids {
 
 #[macro_export]
 /// Parse a target expression into `TargetId`
+/// Example
+/// ```
+/// let db: RwLock<memberdb::DB> = ...;
+/// let client: reqwest::Client = ...;
+/// let target_id: TargetId = parse_user_target!(ctx, msg, db, client, guild, "d:test");
+/// ```
 macro_rules! parse_user_target {
     ($ctx:ident, $msg:ident, $db:ident, $client:ident, $guild:ident, $s:expr) => {{
         let target = match TargetObject::from_str(&$ctx, &$db, &$client, &$guild, $s).await {
@@ -139,6 +184,12 @@ macro_rules! parse_user_target {
 
 #[macro_export]
 /// Parse a target expression into member id
+/// Example
+/// ```
+/// let db: RwLock<memberdb::DB> = ...;
+/// let client: reqwest::Client = ...;
+/// let member_id = parse_user_target!(ctx, msg, db, client, guild, "d:test");
+/// ```
 macro_rules! parse_user_target_mid {
     ($ctx:ident, $msg:ident, $db:ident, $client:ident, $guild:ident, $s:expr) => {{
         let target = crate::parse_user_target!($ctx, $msg, $db, $client, $guild, $s);

@@ -8,12 +8,7 @@ use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{fmt, Layer};
 
-use haxbotjr::commands::config::*;
-use haxbotjr::commands::member::*;
-use haxbotjr::commands::meta::*;
-use haxbotjr::commands::owner::*;
-use haxbotjr::commands::staff_util::*;
-use haxbotjr::commands::wynn::*;
+use haxbotjr::commands::*;
 use haxbotjr::data::BotData;
 
 #[group]
@@ -59,9 +54,10 @@ struct Owner;
 
 #[tokio::main]
 async fn main() {
-    // Initialization
+    // Loaded ".env"
     dotenv::dotenv().expect("Failed to load .env file");
 
+    // Initialize logging
     let file_appender = tracing_appender::rolling::daily("./log", "log");
     let (file_writer, _guard) = tracing_appender::non_blocking(file_appender);
     tracing::subscriber::set_global_default(

@@ -1,3 +1,4 @@
+//! Commands that displays bot info
 use std::collections::HashSet;
 
 use chrono::offset::Utc;

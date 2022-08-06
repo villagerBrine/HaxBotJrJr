@@ -1,3 +1,4 @@
+//! Commands that displays Wynncraft info
 use anyhow::Context as AHContext;
 use serenity::client::Context;
 use serenity::framework::standard::macros::command;
@@ -19,6 +20,7 @@ async fn display_online_players(ctx: &Context, msg: &Message, _: Args) -> Comman
 
         // 25 is the embed field limit
         if online.0.len() > 25 {
+            // Send as a message instead of embed
             let mut content = String::new();
             for (world, igns) in online.0.iter() {
                 content.push_str("**");

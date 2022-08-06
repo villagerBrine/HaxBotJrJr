@@ -1,3 +1,4 @@
+//! Loops that listens to events and updates the bot / discord accordingly
 use std::sync::Arc;
 
 use serenity::http::Http;
@@ -15,6 +16,7 @@ use memberdb::model::wynn::McId;
 use memberdb::DB;
 use util::{ctxw, ok, some};
 
+/// Start event listening loops
 pub async fn start_loops(
     cache_http: Arc<CacheAndHttp>, db: Arc<RwLock<DB>>, config: Arc<RwLock<Config>>, wynn_sig: WynnSignal,
     dc_sig: DiscordSignal,
@@ -64,7 +66,7 @@ pub async fn start_loops(
 }
 
 #[instrument(skip(cache_http, guild, db))]
-pub async fn process_db_event(
+async fn process_db_event(
     cache_http: &CacheAndHttp, db: &RwLock<DB>, config: &RwLock<Config>, guild: &Guild, event: &DBEvent,
 ) {
     match event {
@@ -106,6 +108,8 @@ pub async fn process_db_event(
             }
         }
         DBEvent::WynnProfileBind { mid, .. } | DBEvent::WynnProfileUnbind { mid, removed: false, .. } => {
+            // Because discord nickname prioritize ign, so when a member's wynn profile is
+            // binded / unbinded, their discord nickname need to be updated.
             let member = some!(get_discord_member_db(&cache_http, &db, *mid, &guild).await, return);
 
             {
@@ -123,12 +127,14 @@ pub async fn process_db_event(
             }
         }
         DBEvent::DiscordProfileBind { mid, old, new } => {
+            // Remove roles & nick from the old discord user
             if let Some(old_discord) = old {
                 if let Some(mut old_member) = get_discord_member(&cache_http, &guild, *old_discord).await {
                     remove_all_role_nick(&cache_http.http, &config, &guild, &mut old_member).await;
                 }
             }
 
+            // Add roles & nick to the new discord user
             let mut member = some!(get_discord_member(&cache_http, &guild, *new).await, return);
             let rank = {
                 let db = db.read().await;
@@ -146,6 +152,7 @@ pub async fn process_wynn_event(
 ) {
     match event {
         WynnEvent::MemberNameChange { id, new_name, .. } => {
+            // Update discord nick due to ign change.
             let (member, mid) = some!(get_discord_member_mc(&cache_http, &db, id, &guild).await, return);
 
             {
@@ -179,6 +186,7 @@ pub async fn process_discord_event(
 ) {
     match event {
         DiscordEvent::MemberUpdate { old: Some(old), new, .. } => {
+            // Update discord nick due to discord username change
             if old.user.name != new.user.name {
                 {
                     let config = config.read().await;
@@ -192,6 +200,7 @@ pub async fn process_discord_event(
                     let db = db.read().await;
                     some!(ok!(memberdb::get_discord_mid(&db, id).await, return), return)
                 };
+                // Only updates it if the discord nick is using discord username instead of ign
                 let has_wynn = {
                     let db = db.read().await;
                     ok!(memberdb::get_member_links(&db, mid).await, return).1.is_some()
@@ -209,6 +218,7 @@ pub async fn process_discord_event(
     }
 }
 
+/// Get a mcid's associated discord user and id.
 pub async fn get_discord_member_mc(
     cache_http: &CacheAndHttp, db: &RwLock<DB>, mcid: &McId, guild: &Guild,
 ) -> Option<(Member, MemberId)> {
@@ -232,6 +242,7 @@ pub async fn get_discord_member_mc(
     None
 }
 
+/// Get a member id's associated discord member
 pub async fn get_discord_member_db(
     cache_http: &CacheAndHttp, db: &RwLock<DB>, mid: MemberId, guild: &Guild,
 ) -> Option<Member> {
@@ -245,12 +256,14 @@ pub async fn get_discord_member_db(
     None
 }
 
+/// Get discord member via `DiscordId`
 pub async fn get_discord_member(cache_http: &CacheAndHttp, guild: &Guild, id: DiscordId) -> Option<Member> {
     let user_id = ok!(u64::try_from(id), "Failed to convert DiscordId to UserId", return None);
     let member = ok!(guild.member(&cache_http, user_id).await, "Failed to get discord member", return None);
     Some(member)
 }
 
+/// Update a discord user's nick and add rank roles.
 pub async fn add_init_role_nick(
     http: &Http, db: &RwLock<DB>, config: &RwLock<Config>, mid: MemberId, rank: MemberRank, guild: &Guild,
     member: &mut Member,
@@ -274,6 +287,7 @@ pub async fn add_init_role_nick(
     }
 }
 
+/// Remove a discord user's nick and all rank roles.
 pub async fn remove_all_role_nick(http: &Http, config: &RwLock<Config>, guild: &Guild, member: &mut Member) {
     if {
         let config = config.read().await;

@@ -1,3 +1,4 @@
+//! Bot data initialization
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -14,6 +15,7 @@ use memberdb::{DBContainer, DB};
 use wynn::cache::{Cache, WynnCacheContainer};
 
 #[derive(Debug, Clone)]
+/// Container for all bot data, so they can all be cloned at once.
 pub struct BotData {
     pub db: Arc<RwLock<DB>>,
     pub config: Arc<RwLock<Config>>,
@@ -26,6 +28,7 @@ pub struct BotData {
 }
 
 impl BotData {
+    /// Initialize bot data
     pub async fn new(member_db_file: &str, config_file: &str) -> Self {
         Self {
             db: DBContainer::new(member_db_file, 5).await,
@@ -39,6 +42,7 @@ impl BotData {
         }
     }
 
+    /// Added data to client
     pub async fn add_to_client(&self, client: &Client) {
         let mut data = client.data.write().await;
         data.insert::<DBContainer>(self.db.clone());
@@ -50,12 +54,14 @@ impl BotData {
     }
 }
 
+/// Bot data key for `ShardManager`
 pub struct ShardManagerContainer;
 
 impl TypeMapKey for ShardManagerContainer {
     type Value = Arc<SMutex<ShardManager>>;
 }
 
+/// Bot data key for `reqwest::Client`
 pub struct ReqClientContainer;
 
 impl TypeMapKey for ReqClientContainer {
@@ -63,6 +69,7 @@ impl TypeMapKey for ReqClientContainer {
 }
 
 impl ReqClientContainer {
+    /// Create a new `reqwest::Client`
     pub async fn new() -> reqwest::Client {
         reqwest::ClientBuilder::new()
             .timeout(Duration::from_secs(5))

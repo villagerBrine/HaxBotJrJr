@@ -56,6 +56,24 @@
     },
     "query": "UPDATE member SET rank=? WHERE oid=?"
   },
+  "21a813ac8c6a0443927a0afbbae0ddd8c77f37fe8f9ec4597d46a01a4d750599": {
+    "describe": {
+      "columns": [
+        {
+          "name": "rowid",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        true
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT oid FROM member WHERE (discord IS NULL AND mcid IS NULL)"
+  },
   "2876039b6e67b084e42d02fea15a903ab7179d7d74d37264ba460418535f59b4": {
     "describe": {
       "columns": [],
@@ -139,24 +157,6 @@
       }
     },
     "query": "UPDATE discord SET voice=voice+?,voice_week=voice_week+? WHERE id=?"
-  },
-  "334b5524a02e66ce6469b2993d38d5fd061aceba456c2755915dc63499946097": {
-    "describe": {
-      "columns": [
-        {
-          "name": "rowid",
-          "ordinal": 0,
-          "type_info": "Int64"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Right": 0
-      }
-    },
-    "query": "SELECT oid FROM member WHERE (discord IS NULL AND mcid IS NULL) OR (discord NOT NULL AND NOT EXISTS (SELECT 1 FROM discord WHERE id=member.discord AND mid=member.oid))"
   },
   "395330a4fef62c0f0582e30ee827976115ffaa152394fc972f1458373423d7ba": {
     "describe": {

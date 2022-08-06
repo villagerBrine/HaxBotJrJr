@@ -1,8 +1,8 @@
+//! Utility function for interacting with `memberdb`
 use serenity::model::id::UserId;
 use tokio::sync::RwLock;
 
-use memberdb::error::DBError;
-use memberdb::model::member::{MemberId, MemberType, ProfileType};
+use memberdb::model::member::MemberId;
 use memberdb::DB;
 use util::{ctx, ok, some2};
 
@@ -15,12 +15,14 @@ pub async fn get_profile_mids(db: &RwLock<DB>, discord_id: i64, mcid: &str) -> (
 }
 
 #[derive(Debug)]
+/// Discord user id or mcid
 pub enum TargetId {
     Discord(UserId),
     Wynn(String),
 }
 
 impl TargetId {
+    /// Get linked member id
     pub async fn get_mid(&self, db: &DB) -> Option<MemberId> {
         match self {
             Self::Discord(id) => {
@@ -29,22 +31,5 @@ impl TargetId {
             }
             Self::Wynn(id) => some2!(memberdb::get_wynn_mid(&db, &id).await),
         }
-    }
-}
-
-pub fn display_db_error(err: &DBError) -> &'static str {
-    match err {
-        DBError::MemberAlreadyExist(_) => "Specified member already exists",
-        DBError::WrongMemberType(ty) => match ty {
-            MemberType::Full => "This command can't be used on a full member",
-            MemberType::DiscordPartial => "This command can't be used on a discord partial member",
-            MemberType::GuildPartial => "This command can't be used on a guild partial member",
-            MemberType::WynnPartial => "This command can't be used on a wynn partial member",
-        },
-        DBError::LinkOverride(ty, _) => match ty {
-            ProfileType::Discord => "Discord user is already linked to another member",
-            ProfileType::Wynn => "Mc account is already linked to another member",
-            ProfileType::Guild => unreachable!(),
-        },
     }
 }

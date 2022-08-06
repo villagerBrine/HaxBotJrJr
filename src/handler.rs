@@ -1,3 +1,4 @@
+//! Bot event handling
 use std::env;
 
 use event::{DiscordContext, DiscordEvent, DiscordSignal};
@@ -11,12 +12,14 @@ use serenity::model::voice::VoiceState;
 use serenity::prelude::*;
 use tracing::info;
 
+/// Bot event handler
 pub struct Handler {
     discord_signal: DiscordSignal,
     main_guild_id: u64,
 }
 
 impl Handler {
+    /// Create a new handler
     pub fn new(discord_signal: DiscordSignal) -> Self {
         let main_guild_id: u64 = env::var("MAIN_GUILD")
             .expect("Expected main guild id in the environment")
@@ -26,6 +29,7 @@ impl Handler {
     }
 }
 
+/// Broadcast a `DiscordEvent`
 macro_rules! send_event {
     ($self:expr, $ctx:expr, $event:expr) => {{
         let ctx = DiscordContext::new($ctx, $self.main_guild_id);

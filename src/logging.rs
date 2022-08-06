@@ -1,3 +1,4 @@
+//! Loops for handling channel loggings.
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -15,6 +16,7 @@ use memberdb::events::DBEvent;
 use memberdb::DB;
 use util::{ctx, ok, some};
 
+/// Make a log message from `WynnEvent`
 fn make_wynn_log(event: &WynnEvent) -> Option<String> {
     Some(match event {
         WynnEvent::MemberJoin { ign, .. } => format!("**{}** joined the guild", ign),
@@ -40,6 +42,7 @@ fn make_wynn_log(event: &WynnEvent) -> Option<String> {
     })
 }
 
+/// All channel tags for logging
 pub const LOG_CHANNEL_TAGS: [TextChannelTag; 4] = [
     TextChannelTag::GuildMemberLog,
     TextChannelTag::GuildLevelLog,
@@ -47,6 +50,7 @@ pub const LOG_CHANNEL_TAGS: [TextChannelTag; 4] = [
     TextChannelTag::OnlineLog,
 ];
 
+/// Get a `WynnEvent`'s corresponding channel tag
 fn get_log_channel_tag(event: &WynnEvent) -> Option<TextChannelTag> {
     Some(match event {
         WynnEvent::MemberJoin { .. }
@@ -62,23 +66,33 @@ fn get_log_channel_tag(event: &WynnEvent) -> Option<TextChannelTag> {
     })
 }
 
+/// Start loop for collecting & sending of channel logs.
 pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Config>>, signal: WynnSignal) {
+    // Logs are collected in a buffer waiting to be send.
     let mut buffers: HashMap<&TextChannelTag, String> = HashMap::with_capacity(LOG_CHANNEL_TAGS.len());
     for k in &LOG_CHANNEL_TAGS {
         buffers.insert(k, String::new());
     }
     let buffers = Arc::new(Mutex::new(buffers));
+
+    // Xp logs are treated differently from other.
+    // Each player's xp contribution info is tracked in the form of `(ign, contributed, total)`
+    // tuple.
+    // When time is come to send xp log, a log message is formatted for each players according to
+    // their tracked xp contribution info.
     let xp_buffer: HashMap<String, (String, i64, i64)> = HashMap::new();
     let xp_buffer = Arc::new(Mutex::new(xp_buffer));
 
     let shared_buffers = Arc::clone(&buffers);
     let shared_xp_buffer = Arc::clone(&xp_buffer);
     let shared_config = Arc::clone(&config);
+    // Start loop that sends log messages
     tokio::spawn(async move {
         info!("Starting discord log channel loop");
         let mut interval = time::interval(Duration::from_secs(60));
         loop {
             interval.tick().await;
+            // Send logs in log buffer, and empty it
             for tag in &LOG_CHANNEL_TAGS {
                 let log = {
                     let mut buffers = shared_buffers.lock().unwrap();
@@ -98,8 +112,10 @@ pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Co
                 }
             }
 
+            // Format xp logs
             let mut log_buffer = String::new();
             {
+                // Add each player's own xp log message to the total buffer
                 let mut xp_buffer = shared_xp_buffer.lock().unwrap();
                 for (ign, diff, xp) in xp_buffer.values() {
                     let diff = util::string::fmt_num(*diff, false);
@@ -110,6 +126,7 @@ pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Co
                 }
                 xp_buffer.clear();
             }
+            // Send the logs if not empty
             if !log_buffer.is_empty() {
                 let config = shared_config.read().await;
                 let _ = ctx!(config.send(&cache_http, &TextChannelTag::XpLog, &log_buffer).await);
@@ -117,6 +134,7 @@ pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Co
         }
     });
 
+    // Start loop that adds to log buffer and track player xp contribution info
     tokio::spawn(async move {
         info!("Starting wynn event logging loop");
         let mut receiver = signal.connect();
@@ -136,10 +154,12 @@ pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Co
 
                 match event {
                     WynnEvent::MemberContribute { id, ign, old_contrib, new_contrib } => {
+                        // Updates xp contribution info tracking
                         let mut xp_buffer = xp_buffer.lock().unwrap();
                         let diff = new_contrib - old_contrib;
                         match xp_buffer.get_mut(id) {
                             Some(contrib) => {
+                                // Updates the ign if it is changed
                                 if *ign != contrib.0 {
                                     contrib.0 = ign.clone();
                                 }
@@ -152,6 +172,7 @@ pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Co
                         }
                     }
                     _ => {
+                        // Make the log message and add it to buffer
                         let log = some!(make_wynn_log(&event), continue);
                         {
                             let mut buffers = buffers.lock().unwrap();
@@ -166,8 +187,10 @@ pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Co
     });
 }
 
+/// The max amount of rows within a summary message
 const SUMMARY_TABLE_LEN: usize = 30;
 
+/// Send a message to summary channels
 macro_rules! send_to_summary {
     ($cache_http:expr, $config:ident, $msg:expr) => {
         let config = $config.read().await;
@@ -175,6 +198,7 @@ macro_rules! send_to_summary {
     };
 }
 
+/// Start the loops for sending weekly summaries
 pub async fn start_summary_loop(
     cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Config>>, db: Arc<RwLock<DB>>,
 ) {
@@ -197,10 +221,12 @@ pub async fn start_summary_loop(
                     }
                 }
 
+                // Send header
                 let now = Utc::now().format("%Y %b %d");
                 let msg = format!("> **Weekly summary for {}**\n\n__Weekly message__", now);
                 send_to_summary!(&cache_http, config, &msg);
 
+                // Send each summaries
                 ok!(send_summary(&cache_http, &config, &message_lb.0).await, continue);
                 send_to_summary!(&cache_http, config, "__Weekly voice time__");
                 ok!(send_summary(&cache_http, &config, &voice_lb.0).await, continue);
@@ -213,9 +239,11 @@ pub async fn start_summary_loop(
     });
 }
 
+/// Build summary messages from stat leaderboard and send them
 async fn send_summary(
     cache_http: &CacheAndHttp, config: &RwLock<Config>, lb: &Vec<Vec<String>>,
 ) -> Result<()> {
+    // If leaderboard is empty
     if lb.len() == 0 {
         let config = config.read().await;
         ctx!(
@@ -226,7 +254,9 @@ async fn send_summary(
     }
 
     let max_widths = msgtool::table::calc_cols_max_width(lb);
+    // Split lb into chunks according to `SUMMARY_TABLE_LEN
     let tables = lb.chunks(SUMMARY_TABLE_LEN).map(|chunk| {
+        // Format rows into string
         let mut table = String::from("```\n");
         for row in chunk.iter().map(|row| msgtool::table::format_row(row, &max_widths)) {
             table.push_str(&row);

@@ -1,3 +1,16 @@
+//! Functions for parsing command arguments.
+//!
+//! These functions only consumes the arguments in order, meaning they will never skip an argument.
+//! The `flag` macro consumes all remaining arguments, so it should be used last during argument
+//! parsing.
+//!
+//! The `arg_check` macro is used to send error message and terminate command if the arguments
+//! aren't consumed entirely, meaning some arguments are invalid and wasn't being parsed.
+//! This is useful as functions `optional`, `any` and `many` simply stops when it encounters
+//! an invalid argument, so user have no way of knowing if an argument was actually parsed or not.
+//!
+//! Note that the `flag` macro invokes `arg_check`, so you don't need to use `arg_check` when `flag`
+//! is also used.
 use std::fmt::Display;
 use std::str::FromStr;
 
@@ -7,6 +20,10 @@ use serenity::model::channel::Message;
 
 use util::{ctx, ok};
 
+/// Similar to `Args::single_quoted`, but also sends error message when it failed to parse or there
+/// is no argument to parse.
+/// `name` describe the argument and is used in the error message.
+/// If `use_err` is true, then `FromStr::Err` is included in the error message.
 pub async fn single<O>(ctx: &Context, msg: &Message, args: &mut Args, name: &str, use_err: bool) -> Option<O>
 where
     O: FromStr,
@@ -29,6 +46,7 @@ where
     None
 }
 
+/// Similar to `single`, but it only consumes the argument if it can be parsed.
 pub fn optional<O>(args: &mut Args) -> Option<O>
 where
     O: FromStr,
@@ -41,6 +59,8 @@ where
     val
 }
 
+/// Consume and parse arguments until it encounters an argument that can't be parsed or end of the
+/// argument list.
 pub fn any<O>(args: &mut Args) -> Vec<O>
 where
     O: FromStr,
@@ -52,6 +72,7 @@ where
     vals
 }
 
+/// Similar to `any`, but sends an error message if the list is empty and return None
 pub async fn many<O>(ctx: &Context, msg: &Message, args: &mut Args, name: &str) -> Option<Vec<O>>
 where
     O: FromStr,
@@ -64,6 +85,8 @@ where
     Some(val)
 }
 
+/// Consume an argument that is the same as given string and return true, false is returned if the
+/// argument didn't match.
 pub fn consume_raw(args: &mut Args, s: &str) -> bool {
     if let Ok(arg) = args.single_quoted::<String>() {
         if arg == s {
@@ -74,6 +97,7 @@ pub fn consume_raw(args: &mut Args, s: &str) -> bool {
     false
 }
 
+/// Consume all remaining arguments
 pub fn rest(args: &mut Args) -> Vec<String> {
     args.quoted();
     let mut v = Vec::with_capacity(args.remaining());
@@ -84,6 +108,23 @@ pub fn rest(args: &mut Args) -> Vec<String> {
 }
 
 #[macro_export]
+/// Parse arguments.
+///
+/// The first 3 parameters are of types `Context`, `Message` and `Args`, and the rest are arg
+/// expressions separated by commas.
+///
+/// Arg expressions can be following:
+/// - `"name"` Get single argument as String
+/// - `?"name"` Get optional argument as Option<String>
+/// - `"name": T` Get single argument as T
+/// - `?"name": T` Get optional argument as Option<T>
+///
+/// Examples:
+/// ```
+/// let key: String = arg!(ctx, msg, args, "key");
+/// let (name, password): (UserName, Option<String>) = arg!(ctx, msg, args, "name": UserName, ?"password");
+/// ```
+/// Required arguments always come before the optional arguments in the expression list.
 macro_rules! arg {
     ($ctx:ident, $msg:ident, $args:ident, $name:literal) => {
         util::some!(crate::util::arg::single::<String>(&$ctx, &$msg, &mut $args, $name, false).await, return Ok(()))
@@ -93,10 +134,6 @@ macro_rules! arg {
     };
     ($ctx:ident, $msg:ident, $args:ident, $name:literal: $type:ty) => {
         util::some!(crate::util::arg::single::<$type>(&$ctx, &$msg, &mut $args, $name, false).await, return Ok(()))
-    };
-    ($ctx:ident, $msg:ident, $args:ident, %$name:literal: $type:ty) => {
-        util::some!(crate::util::arg::single::<$type>(&$ctx, &$msg, &mut $args, $name, true).await,
-            return Ok(()))
     };
     ($ctx:ident, $msg:ident, $args:ident, ?$name:literal: $type:ty) => {
         crate::util::arg::optional::<$type>(&mut $args)
@@ -116,9 +153,31 @@ macro_rules! arg {
     ($ctx:ident, $msg:ident, $args:ident, $($name:literal: $type:ty),+, $(?$opt_name:literal: $opt_type:ty),+) => {
         ($(crate::arg!($ctx, $msg, $args, $name: $type),)+ $(crate::arg!($ctx, $msg, $args, ?$opt_name: $opt_type),)+)
     };
+    ($ctx:ident, $msg:ident, $args:ident, $($name:literal: $type:ty),+, $(?$opt_name:literal),+) => {
+        ($(crate::arg!($ctx, $msg, $args, $name: $type),)+ $(crate::arg!($ctx, $msg, $args, ?$opt_name),)+)
+    };
+    ($ctx:ident, $msg:ident, $args:ident, $($name:literal),+, $(?$opt_name:literal: $opt_type:ty),+) => {
+        ($(crate::arg!($ctx, $msg, $args, $name),)+ $(crate::arg!($ctx, $msg, $args, ?$opt_name: $opt_type),)+)
+    };
+    ($ctx:ident, $msg:ident, $args:ident, $($name:literal),+, $(?$opt_name:literal),+) => {
+        ($(crate::arg!($ctx, $msg, $args, $name),)+ $(crate::arg!($ctx, $msg, $args, ?$opt_name),)+)
+    };
 }
 
 #[macro_export]
+/// Consumes all remaining arguments and checks if they contains flags.
+///
+/// The first 3 parameters are of types `Context`, `Message` and `Args`, and the rest are flag
+/// names separated by commas.
+///
+/// Examples:
+/// ```
+/// let is_silent = flag!(ctx, msg, args, "silent");
+/// let (is_reversed, should_skip): (bool, bool) = flag!(ctx, msg, args, "reverse", "skip");
+/// ```
+///
+/// Note that this macro calls `arg_check`, so you don't need to do it yourself if you are also
+/// using `flag`.
 macro_rules! flag {
     ($ctx:ident, $msg:ident, $args:ident, $flag:literal) => {{
         let flag = crate::util::arg::consume_raw(&mut $args, $flag);
@@ -143,6 +202,9 @@ macro_rules! flag {
 }
 
 #[macro_export]
+/// Consumes all remaining arguments, if it is not empty, then send an error message and terminate
+/// the command.
+/// This is to alert the user of unparsed / invalid arguments
 macro_rules! arg_check {
     ($ctx:ident, $msg:ident, $args:ident) => {{
         let args = crate::util::arg::rest(&mut $args);

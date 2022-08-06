@@ -1,3 +1,4 @@
+//! Staf util commands
 use serenity::client::Context;
 use serenity::framework::standard::macros::command;
 use serenity::framework::standard::{Args, CommandResult};
@@ -118,6 +119,8 @@ async fn fix_role(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 /// this command is need to update ign of in-game non-guild members.
 ///
 /// Note that the `ign` is the ign that is currently stored in database.
+/// For example is a player named "old_name" (as stored in the database) changed their name, then
+/// you need to use the command `syncIgn old_name` to update their ign in the database.
 async fn sync_member_ign(ctx: &Context, msg: &Message, arg: Args) -> CommandResult {
     let (db, client) = data!(ctx, "db", "reqwest");
 
@@ -153,45 +156,4 @@ async fn get_rank_symbols(ctx: &Context, msg: &Message, _: Args) -> CommandResul
     }
 
     finish!(ctx, msg, content)
-}
-
-// TODO move this command to another file
-#[command("nick")]
-#[only_in(guild)]
-#[usage("<custom_nick>")]
-#[example("my custom nick")]
-/// Change your custom nick to `custome_nick`.
-/// Custom nick is the part of your nick that is after your rank and ign/discord username,
-/// for example: "❈ Pucaet This part is my custom nick".
-///
-/// You have to be a member to use this command.
-async fn set_custom_nick(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let custom_nick = args.rest();
-
-    let db = data!(ctx, "db");
-
-    let discord_member = ctx!(msg.member(&ctx).await, "Failed to get member who sent the message")?;
-    let discord_id = ctx!(i64::try_from(discord_member.user.id), "Failed to convert user id to discord id")?;
-    let mid = {
-        let db = db.read().await;
-        some!(
-            ctx!(memberdb::get_discord_mid(&db, discord_id).await)?,
-            finish!(ctx, msg, "You aren't a member")
-        )
-    };
-
-    let result =
-        crate::util::discord::fix_member_nick(&ctx.http, &db, mid, &discord_member, Some(custom_nick)).await;
-
-    finish!(
-        ctx,
-        msg,
-        match result {
-            Ok(_) => "done",
-            Err(why) => {
-                error!("Failed to change nickname: {:#}", why);
-                "Unable to change nickname"
-            }
-        }
-    )
 }

@@ -1,3 +1,4 @@
+//! Dev util commands
 use std::process::Command;
 
 use anyhow::Context as AHContext;
@@ -11,6 +12,7 @@ use util::ctx;
 use crate::{arg, data, finish, send};
 
 #[command]
+/// Run sql query and send its output as message.
 async fn sql(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let (db_name, mut query) = arg!(ctx, msg, args, "database name", "query");
 
@@ -33,6 +35,7 @@ async fn sql(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
 }
 
 #[command("dbCheck")]
+/// Check for database integrity.
 async fn check_db_integrity(ctx: &Context, msg: &Message, _: Args) -> CommandResult {
     let db = data!(ctx, "db");
 
@@ -40,6 +43,7 @@ async fn check_db_integrity(ctx: &Context, msg: &Message, _: Args) -> CommandRes
 
     {
         let db = db.read().await;
+        // Check if member type mismatches linked profiles
         let rows = sqlx::query!(
             "SELECT oid FROM member WHERE \
                                 (discord NOT NULL AND mcid NOT NULL AND type!='full') OR \
@@ -57,9 +61,8 @@ async fn check_db_integrity(ctx: &Context, msg: &Message, _: Args) -> CommandRes
             send!(ctx, msg, format!("member wrong member type: {:?}", rows));
         }
 
-        let rows = sqlx::query!("SELECT oid FROM member WHERE \
-                                (discord IS NULL AND mcid IS NULL) OR \
-                                (discord NOT NULL AND NOT EXISTS (SELECT 1 FROM discord WHERE id=member.discord AND mid=member.oid))")
+        // Checks if member has no linked profiles
+        let rows = sqlx::query!("SELECT oid FROM member WHERE (discord IS NULL AND mcid IS NULL)")
             .fetch_all(&db.pool)
             .await
             .context("")?;
@@ -68,6 +71,7 @@ async fn check_db_integrity(ctx: &Context, msg: &Message, _: Args) -> CommandRes
             send!(ctx, msg, format!("member no links: {:?}", rows));
         }
 
+        // Checks if profile link lead to nonexistence profile
         let rows = sqlx::query!("SELECT oid FROM member WHERE \
                                 (discord NOT NULL AND NOT EXISTS (SELECT 1 FROM discord WHERE id=member.discord AND mid=member.oid)) OR \
                                 (mcid NOT NULL AND NOT EXISTS (SELECT 1 FROM wynn WHERE id=member.mcid AND mid=member.oid))")
@@ -82,6 +86,7 @@ async fn check_db_integrity(ctx: &Context, msg: &Message, _: Args) -> CommandRes
 
     {
         let db = db.read().await;
+        // Checks if member link lead to nonexistence member
         let rows = sqlx::query!("SELECT id FROM discord WHERE \
                                  mid NOT NULL AND NOT EXISTS (SELECT 1 FROM member WHERE oid=discord.mid AND discord=discord.id)")
             .fetch_all(&db.pool)
@@ -95,6 +100,7 @@ async fn check_db_integrity(ctx: &Context, msg: &Message, _: Args) -> CommandRes
 
     {
         let db = db.read().await;
+        // Checks if member link lead to nonexistence member
         let rows = sqlx::query!("SELECT id FROM wynn WHERE \
                                  mid NOT NULL AND NOT EXISTS (SELECT 1 FROM member WHERE oid=wynn.mid AND mcid=wynn.id)")
             .fetch_all(&db.pool)
@@ -105,6 +111,7 @@ async fn check_db_integrity(ctx: &Context, msg: &Message, _: Args) -> CommandRes
             send!(ctx, msg, format!("wynn dangling mid: {:?}", rows));
         }
 
+        // Checks if the value of `wynn.guild` is wrong
         let rows = sqlx::query!(
             "SELECT id FROM wynn WHERE \
                                  guild AND NOT EXISTS (SELECT 1 FROM guild WHERE id=wynn.id) OR \

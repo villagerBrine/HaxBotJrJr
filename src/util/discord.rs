@@ -1,3 +1,4 @@
+//! Discord related utilties
 use anyhow::Result;
 use serenity::http::Http;
 use serenity::model::guild::{Guild, Member};

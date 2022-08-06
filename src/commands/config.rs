@@ -1,3 +1,4 @@
+//! Configuration commands
 use anyhow::Context as AHContext;
 use serenity::client::{Cache, Context};
 use serenity::framework::standard::macros::command;
@@ -354,6 +355,7 @@ async fn list_tagged(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
     finish!(ctx, msg, if content.is_empty() { "Empty" } else { &content });
 }
 
+/// Get tag lists of a channel's parents (category and / or parent channel of a thread)
 async fn get_channel_parent_tag_lists(
     cache: &Cache, config: &RwLock<Config>, channel: &GuildChannel,
 ) -> (Option<String>, Option<String>) {
@@ -375,6 +377,7 @@ async fn get_channel_parent_tag_lists(
     (category_tags, parent_tags)
 }
 
+/// Get a channel's tag list
 async fn get_channel_tag_list(config: &RwLock<Config>, channel_id: &u64) -> Option<String> {
     let channel_tags = {
         let config = config.read().await;

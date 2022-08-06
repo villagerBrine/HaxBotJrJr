@@ -1,7 +1,6 @@
 //! Module for managing and interacting with the member database
 //! You should only access the database via this module.
 pub mod api;
-pub mod error;
 pub mod events;
 pub mod loops;
 pub mod model;
