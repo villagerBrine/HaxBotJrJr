@@ -22,6 +22,7 @@ use crate::util::discord::{MinimalLB, MinimalMembers};
 use crate::{arg, cmd_bail, data, finish, flag, send, send_embed};
 
 #[command("profile")]
+#[bucket("mojang")]
 #[only_in(guild)]
 #[usage("<target>")]
 #[example("m:Pucaet")]
@@ -94,6 +95,7 @@ async fn display_profile(ctx: &Context, msg: &Message, args: Args) -> CommandRes
 }
 
 #[command("addMember")]
+#[bucket("mojang")]
 #[only_in(guild)]
 #[checks(MainServer, Staff)]
 #[usage("<discord_user> <ign>")]
@@ -162,6 +164,7 @@ profiles on an existing member, use the command `link` instead");
 }
 
 #[command("link")]
+#[bucket("mojang")]
 #[only_in(guild)]
 #[checks(MainServer, Staff)]
 #[usage("<discord_user> <ign>")]
@@ -261,6 +264,7 @@ unlink one of them first, then call this command again"
 }
 
 #[command("addPartial")]
+#[bucket("mojang")]
 #[only_in(guild)]
 #[checks(MainServer, Staff)]
 #[usage("<discord | wynn> <target>")]
@@ -378,6 +382,7 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
 }
 
 #[command("unlink")]
+#[bucket("mojang")]
 #[only_in(guild)]
 #[checks(MainServer, Staff)]
 #[usage("<discord | wynn> <target>")]
@@ -468,6 +473,7 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
 }
 
 #[command("removeMember")]
+#[bucket("mojang")]
 #[only_in(guild)]
 #[checks(MainServer, Staff)]
 #[usage("<target>")]
@@ -563,6 +569,7 @@ async fn set_rank(
 }
 
 #[command("setRank")]
+#[bucket("mojang")]
 #[only_in(guild)]
 #[checks(MainServer, Staff)]
 #[usage("<rank> <target>")]
@@ -595,6 +602,7 @@ pub async fn set_member_rank(ctx: &Context, msg: &Message, mut args: Args) -> Co
 }
 
 #[command("promote")]
+#[bucket("mojang")]
 #[only_in(guild)]
 #[checks(MainServer, Staff)]
 #[usage("<target>")]
@@ -626,6 +634,7 @@ pub async fn promote_member(ctx: &Context, msg: &Message, args: Args) -> Command
 }
 
 #[command("demote")]
+#[bucket("mojang")]
 #[only_in(guild)]
 #[checks(MainServer, Staff)]
 #[usage("<target>")]
@@ -792,6 +801,7 @@ async fn stat_leaderboard(ctx: &Context, msg: &Message, mut args: Args) -> Comma
 }
 
 #[command("member")]
+#[bucket("mojang")]
 #[only_in(guild)]
 #[usage("<target>")]
 #[example("m:Pucaet")]

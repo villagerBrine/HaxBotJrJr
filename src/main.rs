@@ -98,7 +98,10 @@ async fn main() {
         .group(&MEMBERMANAGEMENT_GROUP)
         .group(&CONFIGURATION_GROUP)
         .group(&UTILITIES_GROUP)
-        .group(&OWNER_GROUP);
+        .group(&OWNER_GROUP)
+        // Rate limit for mojang api, 1 request lower just in case
+        .bucket("mojang", |b| b.time_span(600).limit(599))
+        .await;
     let mut client = haxbotjr::my_client(&token, framework, bot_data.discord_signal.clone())
         .await
         .expect("Failed to create client");

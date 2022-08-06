@@ -109,6 +109,7 @@ async fn fix_role(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 }
 
 #[command("syncIgn")]
+#[bucket("mojang")]
 #[only_in(guild)]
 #[checks(Staff)]
 #[usage("<ign>")]
