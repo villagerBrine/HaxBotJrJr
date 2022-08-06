@@ -27,14 +27,12 @@ impl Handler {
             .expect("Invalid main guild id");
         Self { discord_signal, main_guild_id }
     }
-}
 
-/// Broadcast a `DiscordEvent`
-macro_rules! send_event {
-    ($self:expr, $ctx:expr, $event:expr) => {{
-        let ctx = DiscordContext::new($ctx, $self.main_guild_id);
-        $self.discord_signal.signal((ctx, $event))
-    }};
+    /// Broadcast a `DiscordEvent`
+    fn send_event(&self, ctx: &Context, event: DiscordEvent) {
+        let ctx = DiscordContext::new(ctx, self.main_guild_id);
+        self.discord_signal.signal((ctx, event));
+    }
 }
 
 #[async_trait]
@@ -43,7 +41,7 @@ impl EventHandler for Handler {
         info!("Connected as {}", ready.user.name);
         // Ensures main guild is cached when event is sent
         std::thread::sleep(std::time::Duration::from_secs(2));
-        send_event!(self, &ctx, DiscordEvent::Ready);
+        self.send_event(&ctx, DiscordEvent::Ready);
     }
 
     async fn resume(&self, _: Context, _: ResumedEvent) {
@@ -51,7 +49,7 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
-        send_event!(self, &ctx, DiscordEvent::Message { message: msg });
+        self.send_event(&ctx, DiscordEvent::Message { message: msg });
     }
 
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
@@ -65,18 +63,18 @@ impl EventHandler for Handler {
             }
             None => DiscordEvent::VoiceJoin { state: new },
         };
-        send_event!(self, &ctx, event);
+        self.send_event(&ctx, event);
     }
 
     async fn channel_delete(&self, ctx: Context, channel: &GuildChannel) {
-        send_event!(self, &ctx, DiscordEvent::ChannelDelete { channel: channel.clone() });
+        self.send_event(&ctx, DiscordEvent::ChannelDelete { channel: channel.clone() });
     }
 
     async fn guild_member_update(&self, ctx: Context, old: Option<Member>, new: Member) {
-        send_event!(self, &ctx, DiscordEvent::MemberUpdate { old, new });
+        self.send_event(&ctx, DiscordEvent::MemberUpdate { old, new });
     }
 
     async fn guild_role_delete(&self, ctx: Context, _: GuildId, role_id: RoleId, role_data: Option<Role>) {
-        send_event!(self, &ctx, DiscordEvent::RoleDelete { id: role_id, role: role_data });
+        self.send_event(&ctx, DiscordEvent::RoleDelete { id: role_id, role: role_data });
     }
 }

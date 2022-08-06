@@ -8,14 +8,13 @@ use serenity::model::channel::Message;
 use memberdb::query::{Filter, Sort, Stat};
 use memberdb::utils::{FilterSortWrap, SelectableWrap};
 use msgtool::pager::Pager;
-use msgtool::parser::{DiscordObject, TargetObject};
 use msgtool::table::TableData;
 use util::{ctx, some};
 
 use crate::util::arg;
-use crate::util::db::TargetId;
+use crate::util::db::{self, TargetId};
 use crate::util::discord::{MinimalLB, MinimalMembers};
-use crate::{arg, cmd_bail, data, finish, flag, send_embed};
+use crate::{arg, cmd_bail, data, finish, flag, send_embed, t};
 
 #[command("profile")]
 #[bucket("mojang")]
@@ -39,7 +38,7 @@ async fn display_profile(ctx: &Context, msg: &Message, args: Args) -> CommandRes
         if arg.is_empty() {
             TargetId::Discord(msg.author.id)
         } else {
-            crate::parse_user_target!(ctx, msg, db, client, guild, args.rest())
+            t!(db::parse_user_target(&ctx, &msg, &db, &client, &guild, args.rest()).await)
         }
     };
     let profiles = {
@@ -243,7 +242,7 @@ async fn display_member_info(ctx: &Context, msg: &Message, args: Args) -> Comman
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
     let (db, client) = data!(ctx, "db", "reqwest");
 
-    let mid = crate::parse_user_target_mid!(ctx, msg, db, client, guild, args.rest());
+    let mid = t!(db::parse_user_target_mid(&ctx, &msg, &db, &client, &guild, args.rest()).await);
     let member = {
         let db = db.read().await;
         some!(

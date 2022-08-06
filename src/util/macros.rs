@@ -1,5 +1,5 @@
 #[macro_export]
-/// Reply to message sender and exit command.
+/// Reply to message and exit command.
 ///
 /// Examples
 /// ```
@@ -18,7 +18,8 @@ macro_rules! finish {
 }
 
 #[macro_export]
-/// Reply to message sender
+/// Reply to message.
+/// This is equivalent to `ctx!(msg.reply(ctx, format!(...)), ...)?`
 ///
 /// Examples
 /// ```
@@ -116,6 +117,7 @@ macro_rules! data {
 
 #[macro_export]
 /// Send an embed.
+///
 /// Example
 /// ```
 /// send_embed!(ctx, msg, |e: CreateEmbed| {
@@ -130,75 +132,4 @@ macro_rules! send_embed {
             .await
             .context("Failed to send embed")?
     };
-}
-
-#[macro_export]
-/// Get discord id and mc id via discord name and ign.
-/// A discord member is also returned in case if you needs it.
-/// Example
-/// ```
-/// let (member, discord_id, mcid): (Member, i64, String) = get_profile_ids!(
-///     ctx, msg, guild, "MyDiscordName", "ign");
-/// ```
-macro_rules! get_profile_ids {
-    ($ctx:ident, $msg:ident, $guild:ident, $client:ident, $discord_name:ident, $ign:ident) => {{
-        let discord_member = util::some!(
-            util::ctx!(util::discord::get_member_named(&$ctx.http, &$guild, &$discord_name).await)?,
-            crate::finish!($ctx, $msg, "Failed to find an discord user with the given name")
-        );
-        let discord_id =
-            util::ctx!(i64::try_from(discord_member.as_ref().user.id.0), "Failed to convert u64 into i64")?;
-
-        let mcid = util::ok!(
-            wynn::get_ign_id(&$client, &$ign).await,
-            crate::finish!($ctx, $msg, "Provided mc ign doesn't exist")
-        );
-
-        (discord_member, discord_id, mcid)
-    }};
-}
-
-#[macro_export]
-/// Parse a target expression into `TargetId`
-/// Example
-/// ```
-/// let db: RwLock<memberdb::DB> = ...;
-/// let client: reqwest::Client = ...;
-/// let target_id: TargetId = parse_user_target!(ctx, msg, db, client, guild, "d:test");
-/// ```
-macro_rules! parse_user_target {
-    ($ctx:ident, $msg:ident, $db:ident, $client:ident, $guild:ident, $s:expr) => {{
-        let target = match TargetObject::from_str(&$ctx, &$db, &$client, &$guild, $s).await {
-            Ok(v) => v,
-            Err(why) => finish!($ctx, $msg, format!("invalid target: {}", why)),
-        };
-        match target {
-            TargetObject::Discord(DiscordObject::Member(member)) => {
-                crate::util::db::TargetId::Discord(member.as_ref().user.id.clone())
-            }
-            TargetObject::Mc(id) => crate::util::db::TargetId::Wynn(id),
-            _ => finish!($ctx, $msg, "Only discord/mc user are accepted as target"),
-        }
-    }};
-}
-
-#[macro_export]
-/// Parse a target expression into member id
-/// Example
-/// ```
-/// let db: RwLock<memberdb::DB> = ...;
-/// let client: reqwest::Client = ...;
-/// let member_id = parse_user_target!(ctx, msg, db, client, guild, "d:test");
-/// ```
-macro_rules! parse_user_target_mid {
-    ($ctx:ident, $msg:ident, $db:ident, $client:ident, $guild:ident, $s:expr) => {{
-        let target = crate::parse_user_target!($ctx, $msg, $db, $client, $guild, $s);
-        util::some!(
-            {
-                let db = $db.read().await;
-                target.get_mid(&db).await
-            },
-            finish!($ctx, $msg, "Failed to find target member in database")
-        )
-    }};
 }

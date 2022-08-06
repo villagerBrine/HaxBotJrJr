@@ -7,11 +7,11 @@ use tokio::sync::RwLock;
 use memberdb::events::DBEvent;
 use memberdb::model::member::{MemberId, MemberRank, MemberType, ProfileType};
 use memberdb::DB;
-use msgtool::parser::{DiscordObject, TargetObject};
 use util::{ctx, ok, some};
 
 use crate::checks::{MAINSERVER_CHECK, STAFF_CHECK};
-use crate::{arg, cmd_bail, data, finish, send};
+use crate::util::db;
+use crate::{arg, cmd_bail, data, finish, send, t};
 
 #[command("addMember")]
 #[bucket("mojang")]
@@ -33,10 +33,10 @@ pub async fn add_member(ctx: &Context, msg: &Message, mut args: Args) -> Command
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
 
     let (discord_member, discord_id, mcid) =
-        crate::get_profile_ids!(ctx, msg, guild, client, discord_name, ign);
+        t!(db::get_profile_ids(&ctx, &msg, &guild, &client, &discord_name, &ign).await);
 
     // Check for precondition. Both profiles has to be unlinked
-    let (wynn_mid, discord_mid) = crate::util::db::get_profile_mids(&db, discord_id, &mcid).await;
+    let (wynn_mid, discord_mid) = db::get_profile_mids(&db, discord_id, &mcid).await;
     if discord_mid.is_some() && wynn_mid.is_some() && discord_mid == wynn_mid {
         finish!(ctx, msg, "Both profiles are already linked to the same member");
     }
@@ -109,7 +109,7 @@ pub async fn link_profile(ctx: &Context, msg: &Message, mut args: Args) -> Comma
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
 
     let (_discord_member, discord_id, mcid) =
-        crate::get_profile_ids!(ctx, msg, guild, client, discord_name, ign);
+        t!(db::get_profile_ids(&ctx, &msg, &guild, &client, &discord_name, &ign).await);
 
     let (wynn_mid, discord_mid) = crate::util::db::get_profile_mids(&db, discord_id, &mcid).await;
     if discord_mid.and(wynn_mid).is_some() && discord_mid == wynn_mid {
@@ -329,7 +329,7 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message guild"));
     let (db, client) = data!(ctx, "db", "reqwest");
 
-    let mid = crate::parse_user_target_mid!(ctx, msg, db, client, guild, target_arg);
+    let mid = t!(db::parse_user_target_mid(&ctx, &msg, &db, &client, &guild, target_arg).await);
 
     let (old_discord, old_mcid) = {
         let db = db.read().await;
@@ -414,7 +414,7 @@ pub async fn remove_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
     let (db, client) = data!(ctx, "db", "reqwest");
 
-    let mid = crate::parse_user_target_mid!(ctx, msg, db, client, guild, args.rest());
+    let mid = t!(db::parse_user_target_mid(&ctx, &msg, &db, &client, &guild, args.rest()).await);
 
     let member_type = {
         let db = db.read().await;
@@ -517,7 +517,7 @@ pub async fn set_member_rank(ctx: &Context, msg: &Message, mut args: Args) -> Co
 
     let rank = arg!(ctx, msg, args, "rank": MemberRank);
 
-    let mid = crate::parse_user_target_mid!(ctx, msg, db, client, guild, args.rest());
+    let mid = t!(db::parse_user_target_mid(&ctx, &msg, &db, &client, &guild, args.rest()).await);
 
     let old_rank = {
         let db = db.read().await;
@@ -548,7 +548,7 @@ pub async fn promote_member(ctx: &Context, msg: &Message, args: Args) -> Command
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
     let (db, client) = data!(ctx, "db", "reqwest");
 
-    let mid = crate::parse_user_target_mid!(ctx, msg, db, client, guild, args.rest());
+    let mid = t!(db::parse_user_target_mid(&ctx, &msg, &db, &client, &guild, args.rest()).await);
 
     let old_rank = {
         let db = db.read().await;
@@ -580,7 +580,7 @@ pub async fn demote_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
     let (db, client) = data!(ctx, "db", "reqwest");
 
-    let mid = crate::parse_user_target_mid!(ctx, msg, db, client, guild, args.rest());
+    let mid = t!(db::parse_user_target_mid(&ctx, &msg, &db, &client, &guild, args.rest()).await);
 
     let old_rank = {
         let db = db.read().await;

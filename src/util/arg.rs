@@ -20,6 +20,8 @@ use serenity::model::channel::Message;
 
 use util::{ctx, ok};
 
+use crate::util::Terminator;
+
 /// Similar to `Args::single_quoted`, but also sends error message when it failed to parse or there
 /// is no argument to parse.
 /// `name` describe the argument and is used in the error message.
@@ -107,6 +109,33 @@ pub fn rest(args: &mut Args) -> Vec<String> {
     v
 }
 
+/// Consumes all remaining arguments, if it is not empty, then send an error message and terminate
+/// the command.
+/// This is to alert the user of unparsed / invalid arguments
+pub async fn arg_check(ctx: &Context, msg: &Message, args: &mut Args) -> Terminator<()> {
+    let args = rest(args);
+    arg_check_list(ctx, msg, args).await
+}
+
+/// Same as `arg_check` buts accepts `Vec<String>` instead of `Args`
+async fn arg_check_list(ctx: &Context, msg: &Message, arg_list: Vec<String>) -> Terminator<()> {
+    if arg_list.len() == 1 {
+        let _ = ctx!(
+            msg.reply(ctx, format!("Unrecognized argument `{}`", arg_list.get(0).unwrap()))
+                .await
+        );
+        Terminator::Terminate
+    } else if arg_list.len() > 1 {
+        let _ = ctx!(
+            msg.reply(ctx, format!("Unrecognized arguments `{}`", arg_list.join("`, `")))
+                .await
+        );
+        Terminator::Terminate
+    } else {
+        Terminator::Proceed(())
+    }
+}
+
 #[macro_export]
 /// Parse arguments.
 ///
@@ -183,7 +212,7 @@ macro_rules! flag {
         let flag = crate::util::arg::consume_raw(&mut $args, $flag);
         $args.quoted();
         if $args.remaining() > 0 {
-            crate::arg_check!($ctx, $msg, $args);
+            crate::t!(crate::util::arg::arg_check($ctx, $msg, &mut $args).await);
         }
         flag
     }};
@@ -196,25 +225,7 @@ macro_rules! flag {
             }
             None => false
         },)+);
-        crate::arg_check!(RAW $ctx, $msg, args);
+        crate::t!(crate::util::arg::arg_check_list($ctx, $msg, args).await);
         flags
     }}
-}
-
-#[macro_export]
-/// Consumes all remaining arguments, if it is not empty, then send an error message and terminate
-/// the command.
-/// This is to alert the user of unparsed / invalid arguments
-macro_rules! arg_check {
-    ($ctx:ident, $msg:ident, $args:ident) => {{
-        let args = crate::util::arg::rest(&mut $args);
-        crate::arg_check!(RAW $ctx, $msg, args);
-    }};
-    (RAW $ctx:ident, $msg:ident, $args:ident) => {{
-        if $args.len() == 1 {
-            crate::finish!($ctx, $msg, "Unrecognized argument `{}`", $args.get(0).unwrap())
-        } else if $args.len() > 1 {
-            crate::finish!($ctx, $msg, "Unrecognized arguments `{}`", $args.join("`, `"))
-        }
-    }};
 }
