@@ -462,7 +462,7 @@ async fn set_rank(
         );
         ctx!(memberdb::get_member_rank(&db, mid).await)?
     };
-    if caller_rank >= old_rank {
+    if caller_rank <= old_rank {
         finish!(ctx, msg, "You can't change the rank of someone with a higher or equal rank to yours")
     }
     if caller_rank <= rank {
