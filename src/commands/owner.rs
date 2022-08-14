@@ -110,20 +110,6 @@ async fn check_db_integrity(ctx: &Context, msg: &Message, _: Args) -> CommandRes
         if !rows.is_empty() {
             send!(ctx, msg, format!("wynn dangling mid: {:?}", rows));
         }
-
-        // Checks if the value of `wynn.guild` is wrong
-        let rows = sqlx::query!(
-            "SELECT id FROM wynn WHERE \
-                                 guild AND NOT EXISTS (SELECT 1 FROM guild WHERE id=wynn.id) OR \
-                                 NOT guild AND EXISTS (SELECT 1 FROM guild WHERE id=wynn.id)"
-        )
-        .fetch_all(&db.pool)
-        .await
-        .context("")?;
-
-        if !rows.is_empty() {
-            send!(ctx, msg, format!("wynn invalid guild flag: {:?}", rows));
-        }
     }
 
     ctx!(msg.edit(&ctx, |e| { e.content("done") }).await)?;
