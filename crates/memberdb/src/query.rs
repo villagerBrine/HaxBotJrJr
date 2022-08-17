@@ -416,6 +416,9 @@ impl FromStr for Filter {
                 _ => {}
             }
 
+            if let Ok(member_type) = MemberType::from_str(s) {
+                return Ok(Self::MemberType(member_type));
+            }
             if let Ok(stat) = Stat::from_str(s) {
                 return Ok(Self::Stat(stat, 1, Ordering::Greater));
             }
