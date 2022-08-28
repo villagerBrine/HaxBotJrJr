@@ -1,6 +1,7 @@
-//! This module contains loops that fetches the wynncraft api periodically, and broadcast any `WynnEvent`
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::thread;
+use std::time::Duration as StdDuration;
 
 use reqwest::Client;
 use tokio::sync::RwLock;
@@ -13,14 +14,19 @@ use memberdb::DB;
 use crate::cache::Cache;
 use crate::model::{Guild, GuildMember, ServerList};
 
-/// Start loops to analyze wynncraft api and broadcast `WynnEvent`
+/// Start loops for fetching and analyzing of wynncraft api and broadcasting [`WynnEvent`]
+///
+/// This function need to be called for [`Cache`] and [`WynnEvent`] to work.
+///
+/// [`WynnEvent`]: event::WynnEvent
+/// [`Cache`]: crate::cache::Cache
 pub async fn start_loops(signal: WynnSignal, client: Client, cache: Arc<Cache>, db: Arc<RwLock<DB>>) {
     let shared_signal = signal.clone();
     let shared_client = client.clone();
-    let shared_cache = cache.clone();
+    let shared_cache = Arc::clone(&cache);
     tokio::spawn(async move {
         // This is to make sure wynn events are sent after receivers are created
-        std::thread::sleep(std::time::Duration::from_secs(5));
+        thread::sleep(StdDuration::from_secs(5));
         main_guild_api_loop(shared_signal, &shared_client, &shared_cache).await;
     });
 
@@ -29,7 +35,9 @@ pub async fn start_loops(signal: WynnSignal, client: Client, cache: Arc<Cache>, 
     });
 }
 
-/// Analyze main guild statistics and broadcast `WynnEvent`
+/// Starts a loop to analyze main guild statistics and broadcast [`WynnEvent`]
+///
+/// [`WynnEvent`]: event::WynnEvent
 async fn main_guild_api_loop(signal: WynnSignal, client: &Client, cache: &Cache) {
     let mut interval = time::interval(Duration::from_millis(10000));
     let mut prev_timestamp = 0;
@@ -136,7 +144,9 @@ async fn main_guild_api_loop(signal: WynnSignal, client: &Client, cache: &Cache)
     }
 }
 
-/// Compare old & new guild member statistics for `WynnEvent`
+/// Analyzes old & new guild member statistics for [`WynnEvent`]
+///
+/// [`WynnEvent`]: event::WynnEvent
 fn get_member_events(old: &GuildMember, new: &GuildMember) -> Vec<WynnEvent> {
     let mut events = Vec::new();
 
@@ -176,7 +186,9 @@ fn get_member_events(old: &GuildMember, new: &GuildMember) -> Vec<WynnEvent> {
     events
 }
 
-/// Analyze server online players and broadcast `WynnEvent`
+/// Starts a loop to analyze server online players and broadcast [`WynnEvent`]
+///
+/// [`WynnEvent`]: event::WynnEvent
 async fn server_api_loop(signal: WynnSignal, client: &Client, db: &RwLock<DB>, cache: &Cache) {
     let mut interval = time::interval(Duration::from_secs(60));
     let mut prev_timestamp: u64 = 0;
@@ -261,7 +273,7 @@ async fn server_api_loop(signal: WynnSignal, client: &Client, db: &RwLock<DB>, c
                 for ign in igns {
                     // Filter out igns that can't be tracked, aka not in database
                     if all_igns.contains(ign) {
-                        match tracked_ign.get_world(ign) {
+                        match tracked_ign.world(ign) {
                             Some(old_world) => {
                                 // Player was online previously
                                 // Update online time as the elapsed time from previous loop

@@ -9,6 +9,8 @@ edition = "2021"
 tracing = "0.1.23"
 anyhow = "1.0"
 num-format = "0.4.0"
+serde = "1.0"
+serde_json = "1.0"
 
 [dependencies.reqwest]
 version = "0.11"
@@ -17,4 +19,4 @@ features = ["json"]
 [dependencies.serenity]
 version = "0.11"
 default-features = false
-features = ["framework", "standard_framework"]
+features = ["framework", "standard_framework", "rustls_backend", "gateway", "cache"]

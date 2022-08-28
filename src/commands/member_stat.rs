@@ -8,7 +8,7 @@ use serenity::model::channel::Message;
 use memberdb::query::{Filter, Sort, Stat};
 use memberdb::utils::{FilterSortWrap, SelectableWrap};
 use msgtool::pager::Pager;
-use msgtool::table::TableData;
+use msgtool::table::{self, TableData};
 use util::{ctx, some};
 
 use crate::util::arg;
@@ -372,7 +372,9 @@ async fn display_table(ctx: &Context, msg: &Message, mut args: Args) -> CommandR
 /// Display a table as paged message.
 macro_rules! display_table_pages {
     ($ctx:ident, $channel_id:expr, $data:ident, $header:ident, $page_len:literal, $is_minimal:ident, $minimal_wrap:ident) => {{
-        let table_data = TableData::paginate($data, $header, $page_len);
+        let data = table::borrow_table(&$data);
+        let header = table::borrow_row(&$header);
+        let table_data = TableData::paginate(data, header, $page_len);
         if $is_minimal {
             let table_data = table_data
                 .into_iter()

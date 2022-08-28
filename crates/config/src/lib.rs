@@ -1,4 +1,42 @@
-//! Load & saving of configuration data
+//! Provides tools for managing bot configuration data
+//!
+//! The [`Config`] struct contains all configuration data and can be access from bot data.
+//! ```
+//! use std::sync::Arc;
+//!
+//! use serenity::client::Context;
+//! use serenity::model::channel::{Message, Channel};
+//! use serenity::framework::standard::CommandResult;
+//! use tokio::sync::RwLock;
+//! use config::Config;
+//!
+//! async fn check_if_channel_tracked(ctx: &Context, msg: &Message) -> CommandResult {
+//!     // Get config from bot data
+//!     let config: Arc<RwLock<Config>> = {
+//!         let data = ctx.data.read().await;
+//!         let cache = data.get::<Config>().expect("Failed to get config");
+//!         Arc::clone(cache)
+//!     };
+//!     // Get the channel the command was send in
+//!     let channel = match msg.channel(&ctx).await? {
+//!         Channel::Guild(c) => c,
+//!         // Guild only command, so this part is unreachable
+//!         _ => unreachable!()
+//!     };
+//!     // Checks if that channel is track through `Config`
+//!     let is_tracked = {
+//!         let config = config.read().await;
+//!         config.is_channel_tracked(&ctx.cache, &channel)
+//!     };
+//!
+//!     msg.reply(ctx, if is_tracked {
+//!         "This channel is tracked"
+//!     } else {
+//!         "This channel is not tracked"
+//!     }).await?;
+//!     Ok(())
+//! }
+//! ```
 pub mod tag;
 pub mod utils;
 
@@ -35,26 +73,37 @@ impl Config {
     }
 
     /// Write config to file
-    pub fn store(&self, path: &str) {
+    pub fn write(&self, path: &str) {
         write_json!(path, &self, "config");
     }
 
     /// Helper function for checking if a channel has a tag, both directly and indirectly
+    ///
+    /// [`ChannelTag`] is inheritable, meaning if a category has a tag, then it also applies to the
+    /// channels under it; The same rule applies to channel and its threads.
+    ///
+    /// Note that [`TextChannelTag`] isn't inheritable, so using [`TagMap::tag`] on
+    /// [`text_channel_tags`] to check if a channel has a `TextChannelTag` is sufficient.
+    ///
+    /// [`ChannelTag`]: crate::tag::ChannelTag
+    /// [`TextChannelTag`]: crate::tag::TextChannelTag
+    /// [`TagMap::tag`]: crate::tag::TagMap::tag
+    /// [`text_channel_tags`]: crate::Config::text_channel_tags
     fn check_channel_tag(&self, cache: &Cache, channel: &GuildChannel, tag: &ChannelTag) -> bool {
-        if self.channel_tags.tag(&channel.id.0, tag) {
+        if self.channel_tags.tagged(&channel.id.0, tag) {
             return false;
         }
 
         // Checks if its parent channels has the tag
-        let (category_id, parent_id) = util::discord::get_channel_parents(&cache, &channel);
+        let (category_id, parent_id) = util::discord::get_channel_parents(cache, channel);
 
         if let Some(id) = category_id {
-            if self.channel_tags.tag(&id.0, tag) {
+            if self.channel_tags.tagged(&id.0, tag) {
                 return false;
             }
         }
         if let Some(id) = parent_id {
-            if self.channel_tags.tag(&id.0, tag) {
+            if self.channel_tags.tagged(&id.0, tag) {
                 return false;
             }
         }
@@ -62,12 +111,17 @@ impl Config {
     }
 
     /// Helper function for checking if a discord member has a tag, both directly and indirectly
+    ///
+    /// [`UserTag`] is inheritable, meaning if a role has a tag, then it also applies to any users
+    /// with that role.
+    ///
+    /// [`UserTag`]: crate::Tag::UserTag
     fn check_memebr_tag(&self, member: &Member, tag: &UserTag) -> bool {
-        if self.user_tags.tag(&member.user.id.0, tag) {
+        if self.user_tags.tagged(&member.user.id.0, tag) {
             return false;
         }
         for role in &member.roles {
-            if self.user_role_tags.tag(&role.0, tag) {
+            if self.user_role_tags.tagged(&role.0, tag) {
                 return false;
             }
         }
@@ -89,11 +143,13 @@ impl Config {
         self.check_memebr_tag(member, &UserTag::NoRoleUpdate)
     }
 
-    /// Send a message to all the channels with given tag
+    /// Send a message to all the channels with given [`TextChannelTag`]
+    ///
+    /// [`TextChannelTag`]: crate::tag::TextChannelTag
     pub async fn send(&self, cache_http: &impl CacheHttp, tag: &TextChannelTag, content: &str) -> Result<()> {
         let cache = some!(cache_http.cache(), bail!("No cache"));
         let http = cache_http.http();
-        for channel_id in self.text_channel_tags.tag_objects(tag) {
+        for channel_id in self.text_channel_tags.tagged_objects(tag) {
             if let Some(Channel::Guild(channel)) = cache.channel(*channel_id) {
                 channel.say(http, content).await?;
             }
@@ -102,22 +158,25 @@ impl Config {
     }
 }
 
-/// Discord data key for `Config` container
-pub struct ConfigContainer;
-
-impl TypeMapKey for ConfigContainer {
+/// Discord data key for [`Config`]
+/// ```
+/// use std::sync::Arc;
+///
+/// use serenity::client::Context;
+/// use tokio::sync::RwLock;
+/// use config::Config;
+///
+/// async fn get_config_from_ctx(ctx: &Context) -> Arc<RwLock<Config>> {
+///     let data = ctx.data.read().await;
+///     let config = data.get::<Config>().expect("Failed to get config");
+///     Arc::clone(config)
+/// }
+/// ```
+impl TypeMapKey for Config {
     type Value = Arc<RwLock<Config>>;
 }
 
-impl ConfigContainer {
-    /// Create a new `Config` container
-    pub async fn new(file: &str) -> Arc<RwLock<Config>> {
-        let config = Config::new(file).expect("Failed to load config");
-        Arc::new(RwLock::new(config))
-    }
-}
-
-/// Start a loop that keeps the config up to date
+/// Start the loop that keeps the [`Config`] up to date
 pub async fn start_loop(config: Arc<RwLock<Config>>, signal: DiscordSignal) {
     tokio::spawn(async move {
         info!("starting config manage loop (discord event)");

@@ -2073,6 +2073,8 @@ dependencies = [
  "anyhow",
  "num-format",
  "reqwest",
+ "serde",
+ "serde_json",
  "serenity",
  "tracing",
 ]

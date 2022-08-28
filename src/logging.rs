@@ -14,6 +14,7 @@ use config::Config;
 use event::{WynnEvent, WynnSignal};
 use memberdb::events::DBEvent;
 use memberdb::DB;
+use msgtool::table;
 use util::{ctx, ok, some};
 
 /// Make a log message from `WynnEvent`
@@ -147,7 +148,7 @@ pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Co
                 // Do not log if there are no log channels
                 {
                     let config = config.read().await;
-                    if config.text_channel_tags.tag_objects(&tag).next().is_none() {
+                    if config.text_channel_tags.tagged_objects(&tag).next().is_none() {
                         continue;
                     }
                 }
@@ -216,7 +217,12 @@ pub async fn start_summary_loop(
                 // Do not send summary if there are no channels to send
                 {
                     let config = config.read().await;
-                    if config.text_channel_tags.tag_objects(&TextChannelTag::Summary).next().is_none() {
+                    if config
+                        .text_channel_tags
+                        .tagged_objects(&TextChannelTag::Summary)
+                        .next()
+                        .is_none()
+                    {
                         continue;
                     }
                 }
@@ -227,22 +233,20 @@ pub async fn start_summary_loop(
                 send_to_summary!(&cache_http, config, &msg);
 
                 // Send each summaries
-                ok!(send_summary(&cache_http, &config, &message_lb.0).await, continue);
+                ok!(send_summary(&cache_http, &config, &table::borrow_table(&message_lb.0)).await, continue);
                 send_to_summary!(&cache_http, config, "__Weekly voice time__");
-                ok!(send_summary(&cache_http, &config, &voice_lb.0).await, continue);
+                ok!(send_summary(&cache_http, &config, &table::borrow_table(&voice_lb.0)).await, continue);
                 send_to_summary!(&cache_http, config, "__Weekly online time__");
-                ok!(send_summary(&cache_http, &config, &online_lb.0).await, continue);
+                ok!(send_summary(&cache_http, &config, &table::borrow_table(&online_lb.0)).await, continue);
                 send_to_summary!(&cache_http, config, "__Weekly xp contribution__");
-                ok!(send_summary(&cache_http, &config, &xp_lb.0).await, continue);
+                ok!(send_summary(&cache_http, &config, &table::borrow_table(&xp_lb.0)).await, continue);
             }
         }
     });
 }
 
 /// Build summary messages from stat leaderboard and send them
-async fn send_summary(
-    cache_http: &CacheAndHttp, config: &RwLock<Config>, lb: &Vec<Vec<String>>,
-) -> Result<()> {
+async fn send_summary(cache_http: &CacheAndHttp, config: &RwLock<Config>, lb: &Vec<Vec<&str>>) -> Result<()> {
     // If leaderboard is empty
     if lb.len() == 0 {
         let config = config.read().await;

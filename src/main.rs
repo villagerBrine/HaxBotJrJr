@@ -145,8 +145,8 @@ async fn main() {
         let mut interval = time::interval(Duration::from_secs(60));
         loop {
             interval.tick().await;
-            data.wynn_cache.store().await;
-            data.config.read().await.store("./config.json");
+            data.wynn_cache.write().await;
+            data.config.read().await.write("./config.json");
         }
     });
 
@@ -157,9 +157,9 @@ async fn main() {
 
         // shutdown codes
         info!("Saving api cache files");
-        bot_data.wynn_cache.store().await;
+        bot_data.wynn_cache.write().await;
         info!("Saving config file");
-        bot_data.config.read().await.store("./config.json");
+        bot_data.config.read().await.write("./config.json");
         shard_manager.lock().await.shutdown_all().await;
     });
 

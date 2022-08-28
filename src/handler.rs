@@ -49,14 +49,17 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
-        self.send_event(&ctx, DiscordEvent::Message { message: msg });
+        self.send_event(&ctx, DiscordEvent::Message { message: Box::new(msg) });
     }
 
     async fn voice_state_update(&self, ctx: Context, old: Option<VoiceState>, new: VoiceState) {
         let event = match old {
             Some(old) => {
                 if new.channel_id.is_some() {
-                    DiscordEvent::VoiceChange { old_state: old, new_state: new }
+                    DiscordEvent::VoiceChange {
+                        old_state: Box::new(old),
+                        new_state: Box::new(new),
+                    }
                 } else {
                     DiscordEvent::VoiceLeave { old_state: old }
                 }
@@ -76,5 +79,9 @@ impl EventHandler for Handler {
 
     async fn guild_role_delete(&self, ctx: Context, _: GuildId, role_id: RoleId, role_data: Option<Role>) {
         self.send_event(&ctx, DiscordEvent::RoleDelete { id: role_id, role: role_data });
+    }
+
+    async fn guild_member_addition(&self, ctx: Context, member: Member) {
+        self.send_event(&ctx, DiscordEvent::MemberJoin { member });
     }
 }

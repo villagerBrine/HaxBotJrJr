@@ -7,10 +7,11 @@ use serenity::model::channel::{ChannelType, GuildChannel, Message};
 use tokio::sync::RwLock;
 
 use config::tag::{Tag, CHANNEL_TAGS, TEXT_CHANNEL_TAGS, USER_TAGS};
-use config::utils::TagWrap;
+use config::utils::Tags;
 use config::Config;
 use msgtool::parser::DiscordObject;
 use util::discord::PublicChannel;
+use util::string;
 use util::{ok, some};
 
 use crate::checks::STAFF_CHECK;
@@ -27,9 +28,9 @@ async fn list_tags(ctx: &Context, msg: &Message, _: Args) -> CommandResult {
                 "Use `tag info <tag>` to view description of a tag, \
 for operations on those tags, like adding/removing tags, see `help tag` for more info.",
             )
-            .field("Channel", util::string::str_list_iter(CHANNEL_TAGS.iter()), true)
-            .field("Text Channel", util::string::str_list_iter(TEXT_CHANNEL_TAGS.iter()), true)
-            .field("User", util::string::str_list_iter(USER_TAGS.iter()), true)
+            .field("Channel", string::str_join_iter(CHANNEL_TAGS.iter()), true)
+            .field("Text Channel", string::str_join_iter(TEXT_CHANNEL_TAGS.iter()), true)
+            .field("User", string::str_join_iter(USER_TAGS.iter()), true)
     });
     Ok(())
 }
@@ -39,10 +40,10 @@ for operations on those tags, like adding/removing tags, see `help tag` for more
 #[example("NoTrack")]
 /// Describe what object the given tag can be attached to and what it means.
 async fn describe_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let content = match arg!(ctx, msg, args, "tag": TagWrap) {
-        TagWrap::User(t) => format!("User/role tag: {}", t.describe()),
-        TagWrap::Channel(t) => format!("Channel/category tag: {}", t.describe()),
-        TagWrap::TextChannel(t) => format!("Text channel tag: {}", t.describe()),
+    let content = match arg!(ctx, msg, args, "tag": Tags) {
+        Tags::User(t) => format!("User/role tag: {}", t.describe()),
+        Tags::Channel(t) => format!("Channel/category tag: {}", t.describe()),
+        Tags::TextChannel(t) => format!("Text channel tag: {}", t.describe()),
     };
     finish!(ctx, msg, content);
 }
@@ -66,7 +67,7 @@ async fn describe_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandRe
 async fn add_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
 
-    let tag = arg!(ctx, msg, args, "tag": TagWrap);
+    let tag = arg!(ctx, msg, args, "tag": Tags);
     let target_arg = args.rest();
 
     let target = match DiscordObject::from_str(&ctx, &guild, &target_arg).await {
@@ -79,7 +80,7 @@ async fn add_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
         DiscordObject::Member(member) => {
             let member = member.as_ref();
             match tag {
-                TagWrap::User(tag) => {
+                Tags::User(tag) => {
                     let mut config = config.write().await;
                     config.user_tags.add(&member.user.id.0, tag);
                 }
@@ -89,7 +90,7 @@ async fn add_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
         }
         DiscordObject::Role(role) => {
             match tag {
-                TagWrap::User(tag) => {
+                Tags::User(tag) => {
                     let mut config = config.write().await;
                     config.user_role_tags.add(&role.id.0, tag);
                 }
@@ -99,11 +100,11 @@ async fn add_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
         }
         DiscordObject::Channel(channel) => {
             match tag {
-                TagWrap::Channel(tag) => {
+                Tags::Channel(tag) => {
                     let mut config = config.write().await;
                     config.channel_tags.add(&channel.id().0, tag);
                 }
-                TagWrap::TextChannel(tag) => {
+                Tags::TextChannel(tag) => {
                     let id = match channel {
                         PublicChannel::Guild(channel) => match channel.kind {
                             ChannelType::Text => &channel.id.0,
@@ -140,7 +141,7 @@ async fn add_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
 async fn remove_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
 
-    let tag = arg!(ctx, msg, args, "tag": TagWrap);
+    let tag = arg!(ctx, msg, args, "tag": Tags);
     let target_arg = args.rest();
 
     let target = match DiscordObject::from_str(&ctx, &guild, &target_arg).await {
@@ -153,7 +154,7 @@ async fn remove_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
         DiscordObject::Member(member) => {
             let member = member.as_ref();
             match tag {
-                TagWrap::User(tag) => {
+                Tags::User(tag) => {
                     let mut config = config.write().await;
                     config.user_tags.remove(&member.user.id.0, &tag);
                 }
@@ -163,7 +164,7 @@ async fn remove_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
         }
         DiscordObject::Role(role) => {
             match tag {
-                TagWrap::User(tag) => {
+                Tags::User(tag) => {
                     let mut config = config.write().await;
                     config.user_role_tags.remove(&role.id.0, &tag);
                 }
@@ -173,11 +174,11 @@ async fn remove_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
         }
         DiscordObject::Channel(channel) => {
             match tag {
-                TagWrap::Channel(tag) => {
+                Tags::Channel(tag) => {
                     let mut config = config.write().await;
                     config.channel_tags.remove(&channel.id().0, &tag);
                 }
-                TagWrap::TextChannel(tag) => {
+                Tags::TextChannel(tag) => {
                     let mut config = config.write().await;
                     config.text_channel_tags.remove(&channel.id().0, &tag);
                 }
@@ -224,7 +225,7 @@ async fn show_tags(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                 config
                     .user_tags
                     .get(&member.user.id.0)
-                    .map(|tags| util::string::str_list_iter(tags.iter()))
+                    .map(|tags| string::str_join_iter(tags.iter()))
             };
 
             let role_tags: Vec<(String, String)> = {
@@ -238,7 +239,7 @@ async fn show_tags(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                                 Some(role) => role.name,
                                 None => "UNKNOWN".to_string(),
                             };
-                            (role_name, util::string::str_list_iter(tags.iter()))
+                            (role_name, string::str_join_iter(tags.iter()))
                         })
                     })
                     .collect()
@@ -265,7 +266,7 @@ async fn show_tags(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
                 config
                     .user_role_tags
                     .get(&role.id.0)
-                    .map(|tags| util::string::str_list_iter(tags.iter()))
+                    .map(|tags| string::str_join_iter(tags.iter()))
             };
             send_embed!(ctx, msg, |e| {
                 if let Some(list) = list {
@@ -320,34 +321,34 @@ async fn show_tags(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[example("NoNickUpdate")]
 /// List all objects with this tag attached.
 async fn list_tagged(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let tag = arg!(ctx, msg, args, "tag": TagWrap);
+    let tag = arg!(ctx, msg, args, "tag": Tags);
     let config = data!(ctx, "config");
 
     let mut content = String::new();
     match tag {
-        TagWrap::User(tag) => {
+        Tags::User(tag) => {
             {
                 let config = config.read().await;
-                for user_id in config.user_tags.tag_objects(&tag) {
+                for user_id in config.user_tags.tagged_objects(&tag) {
                     content.push_str(&format!("<@!{}> ", user_id));
                 }
             }
             {
                 let config = config.read().await;
-                for role_id in config.user_role_tags.tag_objects(&tag) {
+                for role_id in config.user_role_tags.tagged_objects(&tag) {
                     content.push_str(&format!("<@&{}> ", role_id));
                 }
             }
         }
-        TagWrap::Channel(tag) => {
+        Tags::Channel(tag) => {
             let config = config.read().await;
-            for channel_id in config.channel_tags.tag_objects(&tag) {
+            for channel_id in config.channel_tags.tagged_objects(&tag) {
                 content.push_str(&format!("<#{}> ", channel_id));
             }
         }
-        TagWrap::TextChannel(tag) => {
+        Tags::TextChannel(tag) => {
             let config = config.read().await;
-            for channel_id in config.text_channel_tags.tag_objects(&tag) {
+            for channel_id in config.text_channel_tags.tagged_objects(&tag) {
                 content.push_str(&format!("<#{}> ", channel_id));
             }
         }
@@ -363,10 +364,7 @@ async fn get_channel_parent_tag_lists(
     let category_tags = match category_id {
         Some(id) => {
             let config = config.read().await;
-            config
-                .channel_tags
-                .get(&id.0)
-                .map(|tags| util::string::str_list_iter(tags.iter()))
+            config.channel_tags.get(&id.0).map(|tags| string::str_join_iter(tags.iter()))
         }
         None => None,
     };
@@ -384,14 +382,14 @@ async fn get_channel_tag_list(config: &RwLock<Config>, channel_id: &u64) -> Opti
         config
             .channel_tags
             .get(&channel_id)
-            .map(|tags| util::string::str_list_iter(tags.iter()))
+            .map(|tags| string::str_join_iter(tags.iter()))
     };
     let text_channel_tags = {
         let config = config.read().await;
         config
             .text_channel_tags
             .get(&channel_id)
-            .map(|tags| util::string::str_list_iter(tags.iter()))
+            .map(|tags| string::str_join_iter(tags.iter()))
     };
 
     if channel_tags.is_some() && text_channel_tags.is_some() {

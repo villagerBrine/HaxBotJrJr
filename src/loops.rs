@@ -8,12 +8,13 @@ use tokio::sync::RwLock;
 use tracing::{info, instrument, warn};
 
 use config::Config;
-use event::{DiscordEvent, DiscordSignal, WynnEvent, WynnSignal};
+use event::{DiscordContext, DiscordEvent, DiscordSignal, WynnEvent, WynnSignal};
 use memberdb::events::DBEvent;
 use memberdb::model::discord::DiscordId;
 use memberdb::model::member::{MemberId, MemberRank};
 use memberdb::model::wynn::McId;
 use memberdb::DB;
+use util::discord;
 use util::{ctxw, ok, some};
 
 /// Start event listening loops
@@ -59,8 +60,8 @@ pub async fn start_loops(
         let mut recv = dc_sig.connect();
         loop {
             let event = recv.recv().await.unwrap();
-            let (_ctx, event) = event.as_ref();
-            process_discord_event(&cache_http, &db, &config, &event).await;
+            let (ctx, event) = event.as_ref();
+            process_discord_event(&cache_http, &db, &config, &event, &ctx).await;
         }
     });
 }
@@ -183,6 +184,7 @@ pub async fn process_wynn_event(
 #[instrument(skip(cache_http, db))]
 pub async fn process_discord_event(
     cache_http: &CacheAndHttp, db: &RwLock<DB>, config: &RwLock<Config>, event: &DiscordEvent,
+    ctx: &DiscordContext,
 ) {
     match event {
         DiscordEvent::MemberUpdate { old: Some(old), new, .. } => {
@@ -211,6 +213,14 @@ pub async fn process_discord_event(
                     {
                         warn!("Failed to update discord member's nickname: {:#}", why);
                     }
+                }
+            }
+        }
+        DiscordEvent::MemberJoin { member } => {
+            if let Some(channel_id) = ctx.main_guild.system_channel_id {
+                let msg = format!("{} Welcome to Hackforums! If you're interested in joining the guild, go to <#632705233864228881> and create a ticket!", member);
+                if let Err(why) = channel_id.say(&cache_http.http, msg).await {
+                    warn!("Failed to send welcome message: {:#}", why);
                 }
             }
         }
@@ -295,8 +305,8 @@ pub async fn remove_all_role_nick(http: &Http, config: &RwLock<Config>, guild: &
     } {
         info!("Removing discord rank roles");
         for rank in memberdb::model::member::MANAGED_MEMBER_RANKS {
-            let _ = ctxw!(util::discord::remove_role(&http, rank.get_role(&guild), member).await);
-            let _ = ctxw!(util::discord::remove_role(&http, rank.get_group_role(&guild), member).await);
+            let _ = ctxw!(discord::remove_role_maybe(&http, rank.get_role(&guild), member).await);
+            let _ = ctxw!(discord::remove_role_maybe(&http, rank.get_group_role(&guild), member).await);
         }
     }
 

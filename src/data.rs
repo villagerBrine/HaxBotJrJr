@@ -8,11 +8,11 @@ use serenity::prelude::{Mutex as SMutex, TypeMapKey};
 use serenity::Client;
 use tokio::sync::{Mutex, RwLock};
 
-use config::{Config, ConfigContainer};
+use config::Config;
 use event::timer::TimerSignal;
 use event::{DiscordSignal, WynnSignal};
 use memberdb::{DBContainer, DB};
-use wynn::cache::{Cache, WynnCacheContainer};
+use wynn::cache::Cache;
 
 #[derive(Debug, Clone)]
 /// Container for all bot data, so they can all be cloned at once.
@@ -30,14 +30,17 @@ pub struct BotData {
 impl BotData {
     /// Initialize bot data
     pub async fn new(member_db_file: &str, config_file: &str) -> Self {
+        let wynn_cache = Arc::new(Cache::new().await.expect("Failed to read wynn cache files"));
+        let config = Config::new(config_file).expect("Failed to read config file");
+        let config = Arc::new(RwLock::new(config));
         Self {
             db: DBContainer::new(member_db_file, 5).await,
-            config: ConfigContainer::new(config_file).await,
+            config,
             reqwest_client: ReqClientContainer::new().await,
             wynn_signal: WynnSignal::new(64),
             discord_signal: DiscordSignal::new(64),
             timer_signal: TimerSignal::new(1),
-            wynn_cache: WynnCacheContainer::new().await,
+            wynn_cache,
             voice_tracker: VoiceTrackerContainer::new(),
         }
     }
@@ -46,9 +49,9 @@ impl BotData {
     pub async fn add_to_client(&self, client: &Client) {
         let mut data = client.data.write().await;
         data.insert::<DBContainer>(self.db.clone());
-        data.insert::<ConfigContainer>(self.config.clone());
+        data.insert::<Config>(self.config.clone());
         data.insert::<ReqClientContainer>(self.reqwest_client.clone());
-        data.insert::<WynnCacheContainer>(self.wynn_cache.clone());
+        data.insert::<Cache>(self.wynn_cache.clone());
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
         data.insert::<VoiceTrackerContainer>(self.voice_tracker.clone());
     }

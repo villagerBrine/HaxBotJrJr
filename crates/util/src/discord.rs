@@ -9,8 +9,15 @@ use serenity::model::guild::{Guild, Member, Role};
 use serenity::model::id::ChannelId;
 use serenity::model::permissions::Permissions;
 
-/// The same as Guild::member_named, but if it returns None,
-/// Guild::search_members is used.
+/// Search member in cache using [`Guild::member_named`], but if it isn't cached,
+/// [`Guild::search_members`] is used to search over API.
+///
+/// # Errors
+/// Returns [`Error::Http`] if API returns an error.
+///
+/// [`Guild::member_named`]: serenity::model::guild::Guild::member_named
+/// [`Guild::search_members`]: serenity::model::guild::Guild::search_members
+/// [`Error::Http`]: serenity::Error::Http
 pub async fn get_member_named<'a>(
     http: &'a Http, guild: &'a Guild, name: &'a str,
 ) -> Result<Option<Cow<'a, Member>>> {
@@ -31,7 +38,7 @@ pub async fn get_member_named<'a>(
     }
 }
 
-/// Return a channel's category and parent channel in pair.
+/// Return a channel's category and parent channel (if it is a thread) in a tuple of that order.
 pub fn get_channel_parents(cache: &Cache, channel: &GuildChannel) -> (Option<ChannelId>, Option<ChannelId>) {
     match channel.parent_id {
         Some(parent_id) => {
@@ -49,10 +56,14 @@ pub fn get_channel_parents(cache: &Cache, channel: &GuildChannel) -> (Option<Cha
     }
 }
 
-#[derive(Debug)]
-/// Similar to serenity's Channel enum, but without the Private variant
+/// Similar to [`Channel`], but without the Private variant
+///
+/// [`Channel`]: serenity::model::channel::Channel
+#[derive(Debug, Clone)]
 pub enum PublicChannel<'a> {
+    /// Guild category
     Category(&'a ChannelCategory),
+    /// Guild channel / thread
     Guild(&'a GuildChannel),
 }
 
@@ -60,15 +71,14 @@ impl PublicChannel<'_> {
     /// Get channel's id
     pub fn id(&self) -> ChannelId {
         match self {
-            Self::Guild(c) => c.id.clone(),
-            Self::Category(c) => c.id.clone(),
+            Self::Guild(c) => c.id,
+            Self::Category(c) => c.id,
         }
     }
 }
 
-/// Get a channel or category by id.
-/// This function searches in both Guild.channels and Guild.threads
-pub fn get_channel<'a>(guild: &'a Guild, id: u64) -> Option<PublicChannel<'a>> {
+/// Get cached channel, thread or category by id.
+pub fn get_channel(guild: &Guild, id: u64) -> Option<PublicChannel<'_>> {
     match guild.channels.get(&ChannelId(id)) {
         Some(c) => match c {
             Channel::Guild(c) => Some(PublicChannel::Guild(c)),
@@ -86,8 +96,7 @@ pub fn get_channel<'a>(guild: &'a Guild, id: u64) -> Option<PublicChannel<'a>> {
     }
 }
 
-/// Get a channel or category by name.
-/// This function searches in both Guild.channels and Guild.threads
+/// Get cached channel, thread or category by name.
 pub fn get_channel_named<'a>(guild: &'a Guild, name: &'a str) -> Option<PublicChannel<'a>> {
     for channel in guild.channels.values() {
         match channel {
@@ -112,16 +121,30 @@ pub fn get_channel_named<'a>(guild: &'a Guild, name: &'a str) -> Option<PublicCh
     None
 }
 
-/// Same as Member.remove_role but accepts Option<&Role>
-pub async fn remove_role(http: &Http, role: Option<&Role>, member: &mut Member) -> Result<()> {
+/// Same as [`Member.remove_role`] but accepts `Option<&Role>`.
+///
+/// # Errors
+/// Returns [`Error::Http`] if a role with the given Id does not exist, or if the current user
+/// lacks permission.
+///
+/// [`Error::Http`]: serenity::Error::Http
+/// [`Member.remove_role`]: serenity::model::guild::Member::remove_role
+pub async fn remove_role_maybe(http: &Http, role: Option<&Role>, member: &mut Member) -> Result<()> {
     if let Some(role) = role {
         member.remove_role(http, role.id).await.context("Failed to remove role")?
     }
     Ok(())
 }
 
-/// Same as Member.add_role but accepts Option<&Role>
-pub async fn add_role(http: &Http, role: Option<&Role>, member: &mut Member) -> Result<()> {
+/// Same as [`Member.add_role`] but accepts `Option<&Role>`.
+///
+/// # Errors
+/// Returns [`Error::Http`] if a role with the given Id does not exist, or if the current user
+/// lacks permission.
+///
+/// [`Error::Http`]: serenity::Error::Http
+/// [`Member.add_role`]: serenity::model::guild::Member::add_role
+pub async fn add_role_maybe(http: &Http, role: Option<&Role>, member: &mut Member) -> Result<()> {
     if let Some(role) = role {
         member.add_role(http, role.id).await.context("Failed to add role")?
     }
@@ -129,6 +152,7 @@ pub async fn add_role(http: &Http, role: Option<&Role>, member: &mut Member) -> 
 }
 
 /// Checks if a guild channel allows a permission.
+///
 /// If the channel is a thread, then its parent channel is checked.
 pub fn check_channel_allow(
     guild: &Guild, channel: &GuildChannel, kind: PermissionOverwriteType, perm: Permissions,
@@ -137,7 +161,7 @@ pub fn check_channel_allow(
     if channel.thread_metadata.is_some() {
         if let Some(parent_id) = channel.parent_id {
             if let Some(Channel::Guild(parent)) = guild.channels.get(&parent_id) {
-                return check_channel_allow(guild, &parent, kind, perm);
+                return check_channel_allow(guild, parent, kind, perm);
             }
         }
     }

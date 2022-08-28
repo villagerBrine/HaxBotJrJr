@@ -11,7 +11,7 @@ use tokio::sync::RwLock;
 use memberdb::model::member::MemberId;
 use memberdb::DB;
 use msgtool::parser::{DiscordObject, TargetObject};
-use util::{ctx, ok, some, some2};
+use util::{ctx, ok, ok_some, some};
 
 use crate::util::Terminator::{self, *};
 use crate::{t, tfinish, ttry};
@@ -36,7 +36,7 @@ pub async fn get_profile_ids<'a>(
     let discord_id =
         ttry!(i64::try_from(discord_member.as_ref().user.id.0), "Failed to convert u64 into i64");
 
-    let mcid = ok!(wynn::get_ign_id(client, ign).await, tfinish!(ctx, msg, "Provided mc ign doesn't exist"));
+    let mcid = ok!(wynn::get_id(client, ign).await, tfinish!(ctx, msg, "Provided mc ign doesn't exist"));
 
     Proceed((discord_member, discord_id, mcid))
 }
@@ -85,9 +85,9 @@ impl TargetId {
         match self {
             Self::Discord(id) => {
                 let id = ok!(i64::try_from(*id), return None);
-                some2!(memberdb::get_discord_mid(&db, id).await)
+                ok_some!(memberdb::get_discord_mid(&db, id).await)
             }
-            Self::Wynn(id) => some2!(memberdb::get_wynn_mid(&db, &id).await),
+            Self::Wynn(id) => ok_some!(memberdb::get_wynn_mid(&db, &id).await),
         }
     }
 }

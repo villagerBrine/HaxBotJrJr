@@ -1,17 +1,19 @@
-/// This type of events are broadcasted during specific datetime, allowing the bot to run datetime specific
-/// tasks
+//! Provides the [`TimerEvent`] event
 use chrono::offset::Utc;
 use chrono::{Datelike, Duration};
 use tracing::info;
 
+/// This type of events are broadcasted during specific datetime, allowing the bot to run datetime specific
+/// tasks
 #[derive(Debug, Clone)]
 pub enum TimerEvent {
+    /// Sent at the start of Sunday at UTC time
     Weekly,
 }
 
 crate::signal!(TimerSignal, TimerRecv, TimerEvent);
 
-/// Start the loop for broadcasting `TimerEvent`
+/// Start the loop for broadcasting [`TimerEvent`]
 pub async fn start_loop(signal: TimerSignal) {
     tokio::spawn(async move {
         info!("Starting timer loop");

@@ -8,14 +8,15 @@ use memberdb::model::member::{MemberId, MemberRank};
 use memberdb::DB;
 use msgtool::pager::ToPage;
 use util::ctx;
+use util::discord;
 
 /// Update discord member's role to match up with their rank
 pub async fn fix_discord_roles(
     http: &Http, rank: MemberRank, guild: &Guild, member: &mut Member,
 ) -> Result<()> {
     if memberdb::model::member::MANAGED_MEMBER_RANKS.contains(&rank) {
-        util::discord::add_role(&http, rank.get_role(&guild), member).await?;
-        util::discord::add_role(&http, rank.get_group_role(&guild), member).await?;
+        discord::add_role_maybe(&http, rank.get_role(&guild), member).await?;
+        discord::add_role_maybe(&http, rank.get_group_role(&guild), member).await?;
     }
 
     for other_rank in memberdb::model::member::MANAGED_MEMBER_RANKS {
@@ -23,9 +24,9 @@ pub async fn fix_discord_roles(
             continue;
         }
 
-        util::discord::remove_role(&http, other_rank.get_role(&guild), member).await?;
+        discord::remove_role_maybe(&http, other_rank.get_role(&guild), member).await?;
         if !rank.is_same_group(other_rank) {
-            util::discord::remove_role(&http, other_rank.get_group_role(&guild), member).await?;
+            discord::remove_role_maybe(&http, other_rank.get_group_role(&guild), member).await?;
         }
     }
 
@@ -92,9 +93,9 @@ pub async fn fix_discord_nick(
 }
 
 /// A 2d vector that can be formatted into a minimal lb table via `ToPage`
-pub struct MinimalLB(pub Vec<Vec<String>>);
+pub struct MinimalLB<'a>(pub Vec<Vec<&'a str>>);
 
-impl ToPage for MinimalLB {
+impl<'a> ToPage for MinimalLB<'a> {
     type Page = String;
 
     fn to_page(&self, page_info: Option<(usize, usize)>) -> Self::Page {
@@ -111,9 +112,9 @@ impl ToPage for MinimalLB {
 }
 
 /// A 2d vector that can be formatted into a minimal member list via `ToPage`
-pub struct MinimalMembers(pub Vec<Vec<String>>);
+pub struct MinimalMembers<'a>(pub Vec<Vec<&'a str>>);
 
-impl ToPage for MinimalMembers {
+impl<'a> ToPage for MinimalMembers<'a> {
     type Page = String;
 
     fn to_page(&self, page_info: Option<(usize, usize)>) -> Self::Page {
@@ -130,7 +131,7 @@ impl ToPage for MinimalMembers {
 }
 
 /// Push string, if it is empty, push "none"
-fn push_empty_or(row_s: &mut String, s: &String) {
+fn push_empty_or(row_s: &mut String, s: &str) {
     if s.is_empty() {
         row_s.push_str("none ")
     } else {
@@ -141,9 +142,9 @@ fn push_empty_or(row_s: &mut String, s: &String) {
 }
 
 /// Format a 2d vector into a minimal table
-fn make_minimal_table<F>(data: &Vec<Vec<String>>, page_info: Option<(usize, usize)>, fmt: F) -> String
+fn make_minimal_table<F>(data: &Vec<Vec<&str>>, page_info: Option<(usize, usize)>, fmt: F) -> String
 where
-    F: Fn(&mut String, usize, &String) -> (),
+    F: Fn(&mut String, usize, &str),
 {
     let mut page = data
         .iter()

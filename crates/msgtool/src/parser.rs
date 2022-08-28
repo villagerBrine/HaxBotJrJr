@@ -31,7 +31,7 @@ use util::ok;
 #[derive(Debug)]
 pub enum TargetObject<'a> {
     Mc(String),
-    Discord(DiscordObject<'a>),
+    Discord(Box<DiscordObject<'a>>),
 }
 
 impl<'a> TargetObject<'a> {
@@ -43,7 +43,7 @@ impl<'a> TargetObject<'a> {
             bail!("Target is empty")
         }
         if let Some((prefix, name)) = s.split_once(':') {
-            return Self::parse(cache_http, &db, client, guild, prefix, name).await;
+            return Self::parse(cache_http, db, client, guild, prefix, name).await;
         }
         bail!("Invalid format")
     }
@@ -57,9 +57,9 @@ impl<'a> TargetObject<'a> {
         }
         // Ping parsing is prioritized
         if let Ok(d_obj) = DiscordObject::parse_ping(cache_http, guild, s).await {
-            return Ok(Self::Discord(d_obj));
+            return Ok(Self::Discord(Box::new(d_obj)));
         }
-        Self::from_hinted(cache_http, &db, client, guild, s).await
+        Self::from_hinted(cache_http, db, client, guild, s).await
     }
 
     /// Parse hinted target components: its prefix and target name.
@@ -82,7 +82,7 @@ impl<'a> TargetObject<'a> {
                     Some(id) => Ok(Self::Mc(id)),
                     None => {
                         let id = ok!(
-                            wynn::get_ign_id(client, name).await,
+                            wynn::get_id(client, name).await,
                             bail!("Failed to find player with given ign")
                         );
                         Ok(Self::Mc(id))
@@ -91,7 +91,7 @@ impl<'a> TargetObject<'a> {
             }
             _ => {
                 let d_obj = DiscordObject::parse(cache_http, guild, prefix, name).await?;
-                Ok(Self::Discord(d_obj))
+                Ok(Self::Discord(Box::new(d_obj)))
             }
         }
     }
@@ -109,7 +109,7 @@ pub enum DiscordObjectType {
 #[derive(Debug)]
 pub enum DiscordObject<'a> {
     Channel(PublicChannel<'a>),
-    Member(Cow<'a, Member>),
+    Member(Box<Cow<'a, Member>>),
     Role(&'a Role),
 }
 
@@ -150,8 +150,11 @@ impl<'a> DiscordObject<'a> {
             DiscordObjectType::Member => {
                 // Tries to find member from cache, if failed, fetch it over api
                 return match guild.members.get(&UserId(id)) {
-                    Some(member) => Ok(Self::Member(Cow::Borrowed(member))),
-                    None => Ok(Self::Member(Cow::Owned(guild.member(cache_http, &UserId(id)).await?))),
+                    Some(member) => Ok(Self::Member(Box::new(Cow::Borrowed(member)))),
+                    None => {
+                        let member = guild.member(cache_http, &UserId(id)).await?;
+                        Ok(Self::Member(Box::new(Cow::Owned(member))))
+                    }
                 };
             }
             DiscordObjectType::Channel => {
@@ -176,8 +179,8 @@ impl<'a> DiscordObject<'a> {
     ) -> Result<DiscordObject<'a>> {
         match ident {
             "d" => {
-                if let Some(member) = util::discord::get_member_named(&cache_http.http(), guild, s).await? {
-                    return Ok(Self::Member(member));
+                if let Some(member) = util::discord::get_member_named(cache_http.http(), guild, s).await? {
+                    return Ok(Self::Member(Box::new(member)));
                 }
                 bail!("Failed to find member with given name")
             }
@@ -205,7 +208,7 @@ impl<'a> DiscordObject<'a> {
 /// Note that the example pings are not what this function actually accepts, but instead their
 /// textual form, ex: <#23746372838>
 pub fn extract_id_from_ping(ping: &str) -> Option<(DiscordObjectType, u64)> {
-    if !ping.starts_with("<") || !ping.ends_with(">") {
+    if !ping.starts_with('<') || !ping.ends_with('>') {
         return None;
     }
 

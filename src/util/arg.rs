@@ -150,46 +150,88 @@ async fn arg_check_list(ctx: &Context, msg: &Message, arg_list: Vec<String>) -> 
 ///
 /// Examples:
 /// ```
-/// let key: String = arg!(ctx, msg, args, "key");
-/// let (name, password): (UserName, Option<String>) = arg!(ctx, msg, args, "name": UserName, ?"password");
+/// # use haxbotjr::arg;
+/// use anyhow::Result;
+/// use serenity::client::Context;
+/// use serenity::model::channel::Message;
+/// use serenity::framework::standard::{Args, Delimiter};
+///
+/// use util::ioerr;
+///
+/// #[derive(Eq, PartialEq)]
+/// enum UserAction {
+///     Remove,
+///     Add,
+///     ChangePassword,
+/// }
+///
+/// impl std::str::FromStr for UserAction {
+///     type Err = std::io::Error;
+///
+///     fn from_str(s: &str) -> Result<Self, Self::Err> {
+///         Ok(match s {
+///             "remove" => Self::Remove,
+///             "Add" => Self::Add,
+///             "change_password" => Self::ChangePassword,
+///             _ => return ioerr!("Failed to parse '{}' as UserAction", s),
+///         })
+///     }
+/// }
+///
+/// async fn parse_arguments(ctx: &Context, msg: &Message) -> Result<()> {
+///     let mut args = Args::new("test123 remove", &[Delimiter::Single(' ')]);
+///
+///     let username = arg!(ctx, msg, args, "username");
+///     assert!(username == "test123");
+///
+///     let (action, password) = arg!(ctx, msg, args, "action": UserAction, ?"password");
+///     assert!(action == UserAction::Remove);
+///     assert!(password.is_none());
+///
+///     Ok(())
+/// }
 /// ```
 /// Required arguments always come before the optional arguments in the expression list.
 macro_rules! arg {
     ($ctx:ident, $msg:ident, $args:ident, $name:literal) => {
-        util::some!(crate::util::arg::single::<String>(&$ctx, &$msg, &mut $args, $name, false).await, return Ok(()))
+        util::some!($crate::util::arg::single::<String>(&$ctx, &$msg, &mut $args, $name, false).await, return Ok(()))
     };
     ($ctx:ident, $msg:ident, $args:ident, ?$name:literal) => {
-        crate::util::arg::optional::<String>(&mut $args)
+        $crate::util::arg::optional::<String>(&mut $args)
     };
     ($ctx:ident, $msg:ident, $args:ident, $name:literal: $type:ty) => {
-        util::some!(crate::util::arg::single::<$type>(&$ctx, &$msg, &mut $args, $name, false).await, return Ok(()))
+        util::some!($crate::util::arg::single::<$type>(&$ctx, &$msg, &mut $args, $name, false).await, return Ok(()))
     };
     ($ctx:ident, $msg:ident, $args:ident, ?$name:literal: $type:ty) => {
-        crate::util::arg::optional::<$type>(&mut $args)
+        $crate::util::arg::optional::<$type>(&mut $args)
     };
     ($ctx:ident, $msg:ident, $args:ident, $($name:literal),+) => {
-        ($(crate::arg!($ctx, $msg, $args, $name),)+)
+        ($($crate::arg!($ctx, $msg, $args, $name),)+)
     };
     ($ctx:ident, $msg:ident, $args:ident, $(?$name:literal),+) => {
-        ($(crate::arg!($ctx, $msg, $args, ?$name),)+)
+        ($($crate::arg!($ctx, $msg, $args, ?$name),)+)
     };
     ($ctx:ident, $msg:ident, $args:ident, $($name:literal: $type:ty),+) => {
-        ($(crate::arg!($ctx, $msg, $args, $name: $type),)+)
+        ($($crate::arg!($ctx, $msg, $args, $name: $type),)+)
     };
     ($ctx:ident, $msg:ident, $args:ident, $(?$name:literal: $type:ty),+) => {
-        ($(crate::arg!($ctx, $msg, $args, ?$name: $type),)+)
+        ($($crate::arg!($ctx, $msg, $args, ?$name: $type),)+)
     };
     ($ctx:ident, $msg:ident, $args:ident, $($name:literal: $type:ty),+, $(?$opt_name:literal: $opt_type:ty),+) => {
-        ($(crate::arg!($ctx, $msg, $args, $name: $type),)+ $(crate::arg!($ctx, $msg, $args, ?$opt_name: $opt_type),)+)
+        ($($crate::arg!($ctx, $msg, $args, $name: $type),)+
+         $($crate::arg!($ctx, $msg, $args, ?$opt_name: $opt_type),)+)
     };
     ($ctx:ident, $msg:ident, $args:ident, $($name:literal: $type:ty),+, $(?$opt_name:literal),+) => {
-        ($(crate::arg!($ctx, $msg, $args, $name: $type),)+ $(crate::arg!($ctx, $msg, $args, ?$opt_name),)+)
+        ($($crate::arg!($ctx, $msg, $args, $name: $type),)+
+         $($crate::arg!($ctx, $msg, $args, ?$opt_name),)+)
     };
     ($ctx:ident, $msg:ident, $args:ident, $($name:literal),+, $(?$opt_name:literal: $opt_type:ty),+) => {
-        ($(crate::arg!($ctx, $msg, $args, $name),)+ $(crate::arg!($ctx, $msg, $args, ?$opt_name: $opt_type),)+)
+        ($($crate::arg!($ctx, $msg, $args, $name),)+
+         $($crate::arg!($ctx, $msg, $args, ?$opt_name: $opt_type),)+)
     };
     ($ctx:ident, $msg:ident, $args:ident, $($name:literal),+, $(?$opt_name:literal),+) => {
-        ($(crate::arg!($ctx, $msg, $args, $name),)+ $(crate::arg!($ctx, $msg, $args, ?$opt_name),)+)
+        ($($crate::arg!($ctx, $msg, $args, $name),)+
+         $($crate::arg!($ctx, $msg, $args, ?$opt_name),)+)
     };
 }
 
@@ -198,12 +240,6 @@ macro_rules! arg {
 ///
 /// The first 3 parameters are of types `Context`, `Message` and `Args`, and the rest are flag
 /// names separated by commas.
-///
-/// Examples:
-/// ```
-/// let is_silent = flag!(ctx, msg, args, "silent");
-/// let (is_reversed, should_skip): (bool, bool) = flag!(ctx, msg, args, "reverse", "skip");
-/// ```
 ///
 /// Note that this macro calls `arg_check`, so you don't need to do it yourself if you are also
 /// using `flag`.

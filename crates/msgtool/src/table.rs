@@ -1,4 +1,16 @@
 //! Utilities for formatting tables
+//!
+//! This module provides the function [`format_table`] for formatting a 2d vector into a table.
+//! Functions that formats part of a table are also provided.
+//!
+//! The provided struct [`TableData`] allows for table pagination, and implements [`ToPage`] which
+//! uses [`format_table`], so it can also be used with [`Pager`].
+//!
+//! This module uses `Vec<Vec<&str>>` to represent table, and provides [`borrow_table`] and
+//! [`borrow_row`] for conversion from `Vec<Vec<String>>` to `Vec<Vec<&str>>`.
+//!
+//! [`ToPage`]: crate::pager::ToPage
+//! [`Pager`]: crate::pager::Pager
 use util::some;
 
 use crate::pager::ToPage;
@@ -18,9 +30,45 @@ const BOX_CROSS: char = '╪';
 const BULLET_EMPTY: char = '◌';
 const BULLET_FULL: char = '●';
 
-/// Format a 2d vec of strings into a table, and a page index indicator if `page_info` is provided.
-/// `page_info` is a tuple of current page index and total number of pages.
-pub fn format_table(table: &Vec<Vec<String>>, page_info: Option<(usize, usize)>) -> String {
+/// Format a 2d string vector into a fancy table.
+///
+/// If `page_info` is provided then a page index indicator is included.
+/// `page_info` is a tuple of current page index and total number of pages in that order.
+/// ```
+/// use msgtool::table::format_table;
+///
+/// let mut table = Vec::new();
+///
+/// assert!(format_table(&table, Some((1, 3))).is_empty());
+///
+/// table.push(vec!["name", "rank"      , "xp"]);
+///
+/// assert!(format_table(&table, None) ==
+///"╭────┬────┬──╮
+/// │name│rank│xp│
+/// ╞════╪════╪══╡
+/// ╰────┴────┴──╯");
+///
+/// table.push(vec!["foo" , "Owner"     , "10M"]);
+/// table.push(vec!["bar" , "Strategist", "15B"]);
+/// table.push(vec!["test", "Captain"   , "10,200"]);
+///
+///
+/// assert!(format_table(&table, Some((1, 3))) ==
+///"╭────┬──────────┬──────╮
+/// │name│rank      │xp    │
+/// ╞════╪══════════╪══════╡
+/// │foo │Owner     │10M   │
+/// │bar │Strategist│15B   │
+/// │test│Captain   │10,200│
+/// ╰────┴──────────┴──────╯
+///  ● ◌ ◌");
+/// ```
+pub fn format_table(table: &Vec<Vec<&str>>, page_info: Option<(usize, usize)>) -> String {
+    if table.is_empty() {
+        return String::new();
+    }
+
     let max_widths = calc_cols_max_width(table);
 
     // Initialize the table string with the top box edge
@@ -53,9 +101,32 @@ pub fn format_table(table: &Vec<Vec<String>>, page_info: Option<(usize, usize)>)
     s
 }
 
-/// Iterate over all table (represented as 2d vector) columns and find the max width for each of them
-pub fn calc_cols_max_width(table: &Vec<Vec<String>>) -> Vec<usize> {
-    if table.len() == 0 {
+/// Convert a 2d vector of string to 2d vector of borrowed string
+pub fn borrow_table(table: &[Vec<String>]) -> Vec<Vec<&str>> {
+    table.iter().map(|row| borrow_row(row)).collect()
+}
+
+/// Convert a vector of string to vector of borrowed string
+pub fn borrow_row(row: &[String]) -> Vec<&str> {
+    row.iter().map(|s| s.as_str()).collect()
+}
+
+/// Get the max width of each columns of a 2d string vector.
+///
+/// The returned vector corresponds to each columns in order.
+/// ```
+/// use msgtool::table::calc_cols_max_width;
+///
+/// let mut table = Vec::new();
+/// table.push(vec!["name", "rank"      , "xp"]);
+/// table.push(vec!["foo" , "Owner"     , "10M"]);
+/// table.push(vec!["bar" , "Strategist", "15B"]);
+/// table.push(vec!["test", "Captain"   , "10,200"]);
+///
+/// assert!(calc_cols_max_width(&table) == vec![4, 10, 6]);
+/// ```
+pub fn calc_cols_max_width(table: &Vec<Vec<&str>>) -> Vec<usize> {
+    if table.is_empty() {
         return Vec::new();
     }
 
@@ -70,16 +141,29 @@ pub fn calc_cols_max_width(table: &Vec<Vec<String>>) -> Vec<usize> {
     max_widths
 }
 
-/// Format a list of strings into a table row, padded with space based on max width of each
-/// collumns
-pub fn format_row(row: &Vec<String>, max_widths: &Vec<usize>) -> String {
+/// Format a string vector into table row.
+///
+/// `widths` is the widths of each columns in order, which canbe calculated using
+/// [`calc_cols_max_width`].
+/// if a string is smaller than its corresponding column width, it is then padded with space and
+/// left aligned.
+///
+/// Note that a new line is inserted at the beginning of the row.
+/// ```
+/// use msgtool::table::format_row;
+///
+/// let row = vec!["foo" , "Owner", "10M"];
+/// let widths = vec![4, 10, 6];
+/// assert!(format_row(&row, &widths) == "\n│foo │Owner     │10M   │");
+/// ```
+pub fn format_row(row: &[&str], widths: &[usize]) -> String {
     let mut s = "\n".to_string();
     s.push(BOX_VERTICAL);
 
     for (i, item) in row.iter().enumerate() {
         s.push_str(item);
         // Add the padding
-        if let Some(max_w) = max_widths.get(i) {
+        if let Some(max_w) = widths.get(i) {
             s.push_str(&" ".repeat(max_w - item.len()));
         }
         s.push(BOX_VERTICAL);
@@ -88,22 +172,49 @@ pub fn format_row(row: &Vec<String>, max_widths: &Vec<usize>) -> String {
     s
 }
 
-/// Create a table divider.
-/// `left` and `right` are the edge characters, `hori` is the column dividing character, and `mid`
-/// is the filler character
-fn make_divider(left: char, hori: char, mid: char, right: char, max_widths: &Vec<usize>) -> String {
+/// Create a table row divider.
+///
+/// `widths` is the widths of each columns in order, which canbe calculated using
+/// [`calc_cols_max_width`].
+/// `left` is the first character, and `right` is the last character.
+/// The rest is filled up with `fill`, with `div` dividing each columns according to `widths`.
+/// ```
+/// use msgtool::table::make_divider;
+///
+/// let widths = vec![4, 10, 6];
+/// assert!(make_divider('<', 'o', '$', '>', &widths) == "<oooo$oooooooooo$oooooo>");
+/// ```
+pub fn make_divider(left: char, fill: char, div: char, right: char, widths: &Vec<usize>) -> String {
+    if widths.is_empty() {
+        return String::new();
+    }
+
     let mut s = left.to_string();
 
-    for (i, w) in max_widths.iter().enumerate() {
-        s.push_str(&hori.to_string().repeat(*w));
-        s.push(if i < max_widths.len() - 1 { mid } else { right });
+    for (i, w) in widths.iter().enumerate() {
+        s.push_str(&fill.to_string().repeat(*w));
+        s.push(if i < widths.len() - 1 { div } else { right });
     }
 
     s
 }
 
 /// Create a page index indicator
+///
+/// Note that the page index starts at 1.
+/// ```
+/// use msgtool::table::make_page_indicator;
+/// assert!(make_page_indicator(1, 1) == "●");
+/// assert!(make_page_indicator(2, 3) == "◌ ● ◌")
+/// ```
+///
+/// # Panic
+/// Panics if `page_index` is greater than `page_num`
 pub fn make_page_indicator(page_index: usize, page_num: usize) -> String {
+    if page_index > page_num {
+        panic!("Page index is out of bound");
+    }
+
     if page_index == 1 && page_num == 1 {
         return BULLET_FULL.to_string();
     }
@@ -119,13 +230,56 @@ pub fn make_page_indicator(page_index: usize, page_num: usize) -> String {
 }
 
 /// Data needed to create a table.
-/// Can be formatted into a table via `ToPage`
-#[derive(Debug)]
-pub struct TableData(pub Vec<Vec<String>>);
+///
+/// This struct is designed to be used with [`Pager`] for creating paged table.
+///
+/// [`Pager`]: crate::pager::Pager
+#[derive(Debug, PartialEq, Eq, Default)]
+pub struct TableData<'a>(pub Vec<Vec<&'a str>>);
 
-impl TableData {
-    /// Given a 2d vec of string and split it into chunks, with an optional header row added to each.
-    pub fn paginate(mut data: Vec<Vec<String>>, header: Vec<String>, len: usize) -> Vec<TableData> {
+impl<'a> TableData<'a> {
+    /// Paginates a table represented by 2d string vector with header.
+    ///
+    /// This function splits a table into chunks of `len` rows.
+    /// If `len` doesn't divide the total number of rows evenly, the last chunk will have a length
+    /// of less than `len`.
+    /// Each chunks also has an extra row `header` inserted as the first row.
+    /// All the chunks are then wrapped in [`TableData`].
+    /// ```
+    /// use msgtool::table::TableData;
+    ///
+    /// let header = vec!["name", "rank", "xp"];
+    ///
+    /// let mut table = Vec::new();
+    /// table.push(vec!["foo" , "Owner"     , "10M"]);
+    /// table.push(vec!["bar" , "Strategist", "15B"]);
+    /// table.push(vec!["test", "Captain"   , "10,200"]);
+    /// table.push(vec!["abc" , "Recruit"   , "123"]);
+    /// table.push(vec!["def" , "Recruiter" , "456"]);
+    /// table.push(vec!["ghi" , "Chief"     , "789"]);
+    /// table.push(vec!["jkl" , "Recruit"   , "0"]);
+    ///
+    /// let tables = TableData::paginate(table, header, 3);
+    /// assert!(tables == vec![
+    ///     TableData(vec![
+    ///         vec!["name", "rank"      , "xp"],
+    ///         vec!["foo" , "Owner"     , "10M"],
+    ///         vec!["bar" , "Strategist", "15B"],
+    ///         vec!["test", "Captain"   , "10,200"],
+    ///     ]),
+    ///     TableData(vec![
+    ///         vec!["name", "rank"      , "xp"],
+    ///         vec!["abc" , "Recruit"   , "123"],
+    ///         vec!["def" , "Recruiter" , "456"],
+    ///         vec!["ghi" , "Chief"     , "789"],
+    ///     ]),
+    ///     TableData(vec![
+    ///         vec!["name", "rank"      , "xp"],
+    ///         vec!["jkl" , "Recruit"   , "0"],
+    ///     ]),
+    /// ]);
+    /// ```
+    pub fn paginate(mut data: Vec<Vec<&'a str>>, header: Vec<&'a str>, len: usize) -> Vec<TableData<'a>> {
         // Check if the vec is too short to be chunked
         if data.len() <= len {
             data.insert(0, header);
@@ -142,7 +296,7 @@ impl TableData {
             pages.push(TableData(chunk));
         }
 
-        if data.len() != 0 {
+        if !data.is_empty() {
             data.insert(0, header);
             pages.push(TableData(data));
         }
@@ -151,9 +305,10 @@ impl TableData {
     }
 }
 
-impl ToPage for TableData {
+impl<'a> ToPage for TableData<'a> {
     type Page = String;
 
+    /// Formats into table using [`format_table`].
     fn to_page(&self, page_info: Option<(usize, usize)>) -> Self::Page {
         let mut s = "```\n".to_string();
         s.push_str(&format_table(

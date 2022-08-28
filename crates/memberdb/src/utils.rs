@@ -7,7 +7,7 @@ use serenity::model::id::UserId;
 use serenity::model::user::User;
 use sqlx::sqlite::SqliteRow;
 
-use util::{ioerr, ok, some2};
+use util::{ioerr, ok, ok_some};
 
 use crate::model::discord::{DiscordId, DiscordProfile};
 use crate::model::guild::GuildProfile;
@@ -144,19 +144,19 @@ impl Ids {
     /// Fetch the profiles related to the id
     pub async fn to_profiles(&self, db: &DB) -> Profiles {
         let member = match self.member {
-            Some(mid) => some2!(crate::get_member(db, mid).await),
+            Some(mid) => ok_some!(crate::get_member(db, mid).await),
             None => None,
         };
         let guild = match &self.mc {
-            Some(mcid) => some2!(crate::get_guild_profile(db, &mcid).await),
+            Some(mcid) => ok_some!(crate::get_guild_profile(db, &mcid).await),
             None => None,
         };
         let wynn = match &self.mc {
-            Some(mcid) => some2!(crate::get_wynn_profile(db, &mcid).await),
+            Some(mcid) => ok_some!(crate::get_wynn_profile(db, &mcid).await),
             None => None,
         };
         let discord = match self.discord {
-            Some(discord) => some2!(crate::get_discord_profile(db, discord).await),
+            Some(discord) => ok_some!(crate::get_discord_profile(db, discord).await),
             None => None,
         };
         Profiles { member, guild, discord, wynn }

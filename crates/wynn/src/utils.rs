@@ -8,6 +8,10 @@ use tracing::{error, warn};
 use util::some;
 
 /// Checks if given string is valid mc ign
+///
+/// For a string to be a valid mc ign, following properties are needed:
+/// 1. Btween 3 and 16 characters long.
+/// 2. Contains only alphabets, numbers, or underscore.
 pub fn is_valid_ign(ign: &str) -> bool {
     if let 3..=16 = ign.len() {
         for ch in ign.chars() {
@@ -22,6 +26,10 @@ pub fn is_valid_ign(ign: &str) -> bool {
 }
 
 /// Return a dashed form of given mcid
+/// ```
+/// use wynn::utils::id_dashed;
+/// assert!(id_dashed("12345678123412341234123456789abc") == Some("12345678-1234-1234-1234-123456789abc".to_string()))
+/// ```
 pub fn id_dashed(id: &str) -> Option<String> {
     Some(
         [
@@ -36,6 +44,9 @@ pub fn id_dashed(id: &str) -> Option<String> {
 }
 
 /// Make an api request with exponential backoff
+///
+/// # Errors
+/// Returns [`reqwest::Error`] if something went wrong while sending request.
 pub async fn request(
     client: &Client, max_interal: u64, url: &str, ctx: &str,
 ) -> Result<Response, reqwest::Error> {
@@ -52,7 +63,7 @@ pub async fn request(
     .await
 }
 
-/// Log `reqwest::Error`
+/// Logs [`reqwest::Error`]
 pub fn request_error_log(err: &reqwest::Error, ctx: &str) {
     if err.is_timeout() {
         warn!("Timeout when requesting {}: {}", ctx, err);

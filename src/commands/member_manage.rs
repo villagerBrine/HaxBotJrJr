@@ -264,10 +264,8 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
             );
         }
         ProfileType::Wynn => {
-            let mcid = ok!(
-                wynn::get_ign_id(&client, target_arg).await,
-                finish!(ctx, msg, "Provided ign doesn't exist")
-            );
+            let mcid =
+                ok!(wynn::get_id(&client, target_arg).await, finish!(ctx, msg, "Provided ign doesn't exist"));
 
             {
                 let db = db.read().await;
