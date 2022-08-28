@@ -135,6 +135,22 @@ async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Vec<Wy
                         }
                     }
 
+                    let db = db.write().await;
+                    let mut tx = ok!(ctx!(db.begin().await), return None);
+                    // Bind guild profile as member has joined the guild
+                    if let Ok(false) = ctx!(crate::is_in_guild_tx(&mut tx, id).await) {
+                        info!(%id, %rank, %ign, "Binding guild profile");
+                        let rank = ok!(ctx!(GuildRank::from_api(rank)), return None);
+                        let _ = ctx!(
+                            crate::bind_wynn_guild(&mut tx, id, ign, true, rank).await,
+                            "Failed to bind guild profile",
+                        );
+
+                        info!(%id, xp, "Updates new guild member's xp");
+                        ok!(crate::update_xp(&mut tx, id, *xp).await, "Failed to update xp", return None);
+                    }
+                    let _ = ctx!(tx.commit().await);
+
                     return Some(events);
                 }
                 // Add guild member to database
@@ -151,8 +167,12 @@ async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Vec<Wy
                         return None
                     );
 
-                    info!(%id, xp, "Initialize new guild member's xp");
-                    ok!(crate::update_xp(&mut tx, id, *xp).await, "Failed to initalize xp", return None);
+                    // The reason this is safe to do is because if a player is in guild, then
+                    // there is always a member id associated with their mcid, so the only way a
+                    // player can reach here is to leave the guild and then rejoin, thus the
+                    // following operation won't duplicate their xp as it has been reset.
+                    info!(%id, xp, "Updates new guild member's xp");
+                    ok!(crate::update_xp(&mut tx, id, *xp).await, "Failed to update xp", return None);
 
                     let _ = ctx!(tx.commit().await);
                 }
@@ -165,7 +185,7 @@ async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Vec<Wy
             let mut tx = ok!(ctx!(db.begin().await), return None);
             ok!(
                 crate::bind_wynn_guild(&mut tx, id, ign, false, rank).await,
-                "Failed to remove guild member",
+                "Failed to unbind guild profile",
                 return None
             );
             let _ = ctx!(tx.commit().await);

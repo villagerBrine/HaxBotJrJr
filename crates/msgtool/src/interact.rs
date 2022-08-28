@@ -15,8 +15,11 @@ use serenity::model::id::{ChannelId, UserId};
 use crate::pager::{Pager, ToPage};
 
 /// Color styles for confirm buttons of message components
+#[derive(Debug)]
 pub enum ConfirmStyle {
+    /// Normal green/red button style
     Normal,
+    /// Button style with a focus on the confirm button and it is colored red
     Important,
 }
 

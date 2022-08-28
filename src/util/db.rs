@@ -50,11 +50,11 @@ pub async fn parse_user_target(
         Err(why) => tfinish!(ctx, msg, format!("invalid target: {}", why)),
     };
     Proceed(match target {
-        TargetObject::Discord(DiscordObject::Member(member)) => {
-            TargetId::Discord(member.as_ref().user.id.clone())
-        }
+        TargetObject::Discord(discord_obj) => match *discord_obj {
+            DiscordObject::Member(member) => TargetId::Discord(member.as_ref().user.id),
+            _ => tfinish!(ctx, msg, "Only discord/mc user are accepted as target"),
+        },
         TargetObject::Mc(id) => TargetId::Wynn(id),
-        _ => tfinish!(ctx, msg, "Only discord/mc user are accepted as target"),
     })
 }
 
