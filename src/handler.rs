@@ -8,6 +8,7 @@ use serenity::model::event::ResumedEvent;
 use serenity::model::gateway::Ready;
 use serenity::model::guild::{Member, Role};
 use serenity::model::id::{GuildId, RoleId};
+use serenity::model::user::User;
 use serenity::model::voice::VoiceState;
 use serenity::prelude::*;
 use tracing::info;
@@ -83,5 +84,11 @@ impl EventHandler for Handler {
 
     async fn guild_member_addition(&self, ctx: Context, member: Member) {
         self.send_event(&ctx, DiscordEvent::MemberJoin { member });
+    }
+
+    async fn guild_member_removal(
+        &self, ctx: Context, guild_id: GuildId, user: User, member: Option<Member>,
+    ) {
+        self.send_event(&ctx, DiscordEvent::MemberLeave { user, guild_id, member });
     }
 }

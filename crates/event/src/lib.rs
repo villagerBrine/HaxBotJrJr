@@ -36,7 +36,8 @@ use serenity::client::{Cache, Context};
 use serenity::http::{CacheHttp, Http};
 use serenity::model::channel::{GuildChannel, Message};
 use serenity::model::guild::{Guild, Member, Role};
-use serenity::model::id::RoleId;
+use serenity::model::id::{GuildId, RoleId};
+use serenity::model::user::User;
 use serenity::model::voice::VoiceState;
 
 #[macro_export]
@@ -212,8 +213,14 @@ pub enum DiscordEvent {
     ChannelDelete { channel: GuildChannel },
     /// Guild member updated (ex: nick change)
     MemberUpdate { old: Option<Member>, new: Member },
-    /// Member joins a guild
+    /// Member joins the guild
     MemberJoin { member: Member },
+    /// Member left the guild
+    MemberLeave {
+        user: User,
+        guild_id: GuildId,
+        member: Option<Member>,
+    },
     /// Role deleted
     RoleDelete { id: RoleId, role: Option<Role> },
 }

@@ -371,6 +371,27 @@ async fn process_discord_event(
                 vt.track_voice(&new_state.user_id.0);
             }
         }
+        DiscordEvent::MemberLeave { user, guild_id, .. } => {
+            if *guild_id == ctx.main_guild.id {
+                let mid = {
+                    let db = db.read().await;
+                    let id = ok!(i64::try_from(user.id.0), return);
+                    ok!(ctx!(crate::get_discord_mid(&db, id).await), return)
+                };
+
+                if let Some(mid) = mid {
+                    info!(mid, discord = user.id.0, "User left discord guild, unbinding discord profile");
+                    let db = db.write().await;
+                    let mut tx = ok!(ctx!(db.begin().await), return);
+                    ok!(
+                        crate::bind_discord(&mut tx, mid, None).await,
+                        "Failed to unbind discord profile",
+                        return
+                    );
+                    let _ = ctx!(tx.commit().await);
+                }
+            }
+        }
         _ => {}
     }
 }
