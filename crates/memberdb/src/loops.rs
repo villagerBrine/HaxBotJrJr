@@ -95,7 +95,7 @@ async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Vec<Wy
         WynnEvent::MemberJoin { id, rank, ign, xp } => {
             let mid = {
                 let db = db.read().await;
-                ok!(crate::get_wynn_mid(&db, id).await, "Failed to get wynn.mid", return None)
+                ok!(crate::get_wynn_mid(&mut db.exe(), id).await, "Failed to get wynn.mid", return None)
             };
 
             match mid {
@@ -103,8 +103,8 @@ async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Vec<Wy
                 Some(_) => {
                     let (old_ign, old_rank) = {
                         let db = db.read().await;
-                        let old_ign = crate::get_ign(&db, id).await;
-                        let old_rank = crate::get_guild_rank(&db, id).await;
+                        let old_ign = crate::get_ign(&mut db.exe(), id).await;
+                        let old_rank = crate::get_guild_rank(&mut db.exe(), id).await;
                         (old_ign, old_rank)
                     };
 
@@ -138,7 +138,7 @@ async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Vec<Wy
                     let db = db.write().await;
                     let mut tx = ok!(ctx!(db.begin().await), return None);
                     // Bind guild profile as member has joined the guild
-                    if let Ok(false) = ctx!(crate::is_in_guild_tx(&mut tx, id).await) {
+                    if let Ok(false) = ctx!(crate::is_in_guild(&mut tx.exe(), id).await) {
                         info!(%id, %rank, %ign, "Binding guild profile");
                         let rank = ok!(ctx!(GuildRank::from_api(rank)), return None);
                         let _ = ctx!(
@@ -228,7 +228,11 @@ async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Vec<Wy
         WynnEvent::PlayerStay { ign, world: _world, elapsed } => {
             let id = {
                 let db = db.read().await;
-                ok!(crate::get_ign_mcid(&db, ign).await, "Failed to get id of ign from db", return None)
+                ok!(
+                    crate::get_ign_mcid(&mut db.exe(), ign).await,
+                    "Failed to get id of ign from db",
+                    return None
+                )
             };
             if let Some(id) = id {
                 let db = db.write().await;
@@ -274,7 +278,7 @@ async fn process_discord_event(
             let id = ok!(i64::try_from(message.author.id), "Failed to convert UserId to DiscordId", return);
             let mid = {
                 let db = db.read().await;
-                ok!(crate::get_discord_mid(&db, id).await, return)
+                ok!(crate::get_discord_mid(&mut db.exe(), id).await, return)
             };
             if mid.is_some() {
                 let db = db.write().await;
@@ -376,7 +380,7 @@ async fn process_discord_event(
                 let mid = {
                     let db = db.read().await;
                     let id = ok!(i64::try_from(user.id.0), return);
-                    ok!(ctx!(crate::get_discord_mid(&db, id).await), return)
+                    ok!(ctx!(crate::get_discord_mid(&mut db.exe(), id).await), return)
                 };
 
                 if let Some(mid) = mid {

@@ -41,7 +41,7 @@ async fn fix_nick(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let mid = {
         let db = db.read().await;
         some!(
-            ctx!(memberdb::get_discord_mid(&db, discord_id).await)?,
+            ctx!(memberdb::get_discord_mid(&mut db.exe(), discord_id).await)?,
             finish!(ctx, msg, "The provided discord user isn't a member")
         )
     };
@@ -89,10 +89,10 @@ async fn fix_role(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let rank = {
         let db = db.read().await;
         let mid = some!(
-            ctx!(memberdb::get_discord_mid(&db, discord_id).await)?,
+            ctx!(memberdb::get_discord_mid(&mut db.exe(), discord_id).await)?,
             finish!(ctx, msg, "The provided discord user isn't a member")
         );
-        ctx!(memberdb::get_member_rank(&db, mid).await)?
+        ctx!(memberdb::get_member_rank(&mut db.exe(), mid).await)?
     };
 
     let mut discord_member = discord_member.into_owned();
@@ -127,7 +127,7 @@ async fn sync_member_ign(ctx: &Context, msg: &Message, arg: Args) -> CommandResu
     let old_ign = arg.rest();
     let mcid = {
         let db = db.read().await;
-        ctx!(memberdb::get_ign_mcid(&db, old_ign).await)?
+        ctx!(memberdb::get_ign_mcid(&mut db.exe(), old_ign).await)?
     };
     let mcid = some!(mcid, finish!(ctx, msg, "Unable to find the mc account in database"));
 

@@ -355,12 +355,12 @@ pub async fn bind_discord(
     let has_removed = {
         if discord_new.is_none() {
             // Checking if member should be deleted or demoted
-            let (_, mcid) = get_member_links_tx(tx, mid).await?;
+            let (_, mcid) = get_member_links(&mut tx.exe(), mid).await?;
             match mcid {
                 Some(mcid) => {
-                    if is_in_guild_tx(tx, &mcid).await? {
+                    if is_in_guild(&mut tx.exe(), &mcid).await? {
                         info!("Member is in guild, demote to guild partial");
-                        let before = get_member_type_tx(tx, mid).await?;
+                        let before = get_member_type(&mut tx.exe(), mid).await?;
                         to_guild_partial(tx, mid).await?;
                         tx.signal(DBEvent::MemberAutoGuildDemote { mid, before });
                     } else {
@@ -390,7 +390,7 @@ pub async fn bind_discord(
             }
         } else {
             info!(mid, "Checking if member should be promoted");
-            match get_member_type_tx(tx, mid).await? {
+            match get_member_type(&mut tx.exe(), mid).await? {
                 before @ MemberType::GuildPartial | before @ MemberType::WynnPartial => {
                     to_full_member(tx, mid).await?;
                     tx.signal(DBEvent::MemberFullPromote { mid, before });
@@ -427,10 +427,10 @@ pub async fn bind_wynn(
         .context("Failed to fetch wynn binding from member table")?
         .mcid;
 
-    let member_type = get_member_type_tx(tx, mid).await?;
+    let member_type = get_member_type(&mut tx.exe(), mid).await?;
     if let MemberType::WynnPartial | MemberType::Full = member_type {
         if let Some(mcid_old) = &mcid_old {
-            if mcid_new.is_none() && is_in_guild_tx(tx, mcid_old).await? {
+            if mcid_new.is_none() && is_in_guild(&mut tx.exe(), mcid_old).await? {
                 // Trying to remove wynn binding on full/wynn partial and player is in guild, so
                 // demote to guild partial automatically
                 info!(
@@ -482,7 +482,7 @@ pub async fn bind_wynn(
         // Because the case where a wynn partial is in the guild was already taken care of above,
         // the only action here is to remove member.
         info!("No wynn binding, removing member");
-        let (discord_id, _) = get_member_links_tx(tx, mid).await?;
+        let (discord_id, _) = get_member_links(&mut tx.exe(), mid).await?;
         if discord_id.is_some() {
             // unbind discord then remove member
             bind_discord(tx, mid, None).await?;
@@ -543,11 +543,11 @@ async fn bind_wynn_unchecked(tx: &mut Transaction, mid: MemberId, mcid_new: Opti
 pub async fn bind_wynn_guild(
     tx: &mut Transaction, mcid: &McId, ign: &str, status: bool, rank: GuildRank,
 ) -> Result<Option<MemberId>> {
-    if !wynn_profile_exist_tx(tx, mcid).await? {
+    if !wynn_profile_exist(&mut tx.exe(), mcid).await? {
         info!("Adding missing wynn profile");
         add_wynn_profile(tx, None, mcid, ign).await?;
     }
-    if !guild_profile_exist_tx(tx, mcid).await? {
+    if !guild_profile_exist(&mut tx.exe(), mcid).await? {
         info!("Adding missing guild profile");
         add_guild_profile(tx, mcid, rank).await?;
     }
@@ -559,12 +559,12 @@ pub async fn bind_wynn_guild(
         .await
         .context("Failed to update wynn.guild")?;
 
-    match get_wynn_mid_tx(tx, &mcid).await? {
+    match get_wynn_mid(&mut tx.exe(), &mcid).await? {
         Some(mid) => {
             // The only way a member can be affected by wynn.guild update, is if they are a guild
             // partial and wynn.guild is set to false.
             if !status {
-                if let MemberType::GuildPartial = get_member_type_tx(tx, mid).await? {
+                if let MemberType::GuildPartial = get_member_type(&mut tx.exe(), mid).await? {
                     info!("Removing guild partial member because guild profile is unlinked");
 
                     info!("Unbinding wynn profile");
@@ -576,7 +576,7 @@ pub async fn bind_wynn_guild(
                         removed: true,
                     });
 
-                    let (discord, _) = get_member_links_tx(tx, mid).await?;
+                    let (discord, _) = get_member_links(&mut tx.exe(), mid).await?;
                     remove_member_unchecked(tx, mid).await?;
                     tx.signal(DBEvent::MemberRemove {
                         mid,
@@ -636,7 +636,7 @@ async fn link_discord(tx: &mut Transaction, mid: Option<MemberId>, discord: Disc
 /// This function doesn't ensure database integrity.
 #[instrument(skip(tx))]
 async fn link_or_add_discord(tx: &mut Transaction, mid: Option<MemberId>, discord: DiscordId) -> Result<()> {
-    if discord_profile_exist_tx(tx, discord).await? {
+    if discord_profile_exist(&mut tx.exe(), discord).await? {
         info!("Linking to existing discord profile");
         link_discord(tx, mid, discord).await?;
     } else {
@@ -662,7 +662,7 @@ async fn link_wynn(tx: &mut Transaction, mid: Option<MemberId>, mcid: &str) -> R
 /// This function doesn't ensure database integrity.
 #[instrument(skip(tx))]
 async fn link_or_add_wynn(tx: &mut Transaction, mid: Option<MemberId>, mcid: &str, ign: &str) -> Result<()> {
-    if wynn_profile_exist_tx(tx, mcid).await? {
+    if wynn_profile_exist(&mut tx.exe(), mcid).await? {
         info!("Linking to existing wynn profile");
         link_wynn(tx, mid, mcid).await?;
     } else {
@@ -687,7 +687,7 @@ async fn remove_member_unchecked(tx: &mut Transaction, mid: MemberId) -> Result<
 /// Given a member, unbinds all its profiles, and delete it from database
 #[instrument(skip(tx))]
 pub async fn remove_member(tx: &mut Transaction, mid: MemberId) -> Result<()> {
-    let (discord, mcid) = get_member_links_tx(tx, mid).await?;
+    let (discord, mcid) = get_member_links(&mut tx.exe(), mid).await?;
 
     info!(discord, ?mcid, "Removing member with following profile links");
 

@@ -59,7 +59,7 @@ async fn display_profile(ctx: &Context, msg: &Message, args: Args) -> CommandRes
     let names = msgtool::profile::get_names(&ctx.cache, &profiles).await;
 
     send_embed!(ctx, msg, |e| {
-        e.author(|a| a.name(names.0)).title(names.1);
+        e.author(|a| a.name(names.1)).title(names.0);
 
         if let Some(discord) = &profiles.discord {
             if let Some(user) = memberdb::utils::to_user(&ctx.cache, discord.id) {
@@ -69,13 +69,13 @@ async fn display_profile(ctx: &Context, msg: &Message, args: Args) -> CommandRes
             }
         }
 
-        for (name, value) in msgtool::profile::get_guild_stat_fields(&profiles.guild) {
+        for (name, value) in msgtool::profile::format_guild_stat_fields(&profiles.guild) {
             e.field(name, value, true);
         }
-        for (name, value) in msgtool::profile::get_wynn_stat_fields(&profiles.wynn) {
+        for (name, value) in msgtool::profile::format_wynn_stat_fields(&profiles.wynn) {
             e.field(name, value, true);
         }
-        for (name, value) in msgtool::profile::get_discord_stat_fields(&profiles.discord) {
+        for (name, value) in msgtool::profile::format_discord_stat_fields(&profiles.discord) {
             e.field(name, value, true);
         }
 
@@ -246,7 +246,7 @@ async fn display_member_info(ctx: &Context, msg: &Message, args: Args) -> Comman
     let member = {
         let db = db.read().await;
         some!(
-            ctx!(memberdb::get_member(&db, mid).await, "Failed to get member from db")?,
+            ctx!(memberdb::get_member(&mut db.exe(), mid).await, "Failed to get member from db")?,
             cmd_bail!("Failed to get member from db")
         )
     };
@@ -256,10 +256,10 @@ async fn display_member_info(ctx: &Context, msg: &Message, args: Args) -> Comman
 
     if let Some(mcid) = member.mcid {
         let db = db.read().await;
-        let ign = ctx!(memberdb::get_ign(&db, &mcid).await, "Failed to get wynn.ign")?;
+        let ign = ctx!(memberdb::get_ign(&mut db.exe(), &mcid).await, "Failed to get wynn.ign")?;
         content.push_str(&format!("\n**Minecraft** {} `{}`", ign, mcid));
 
-        if let Ok(rank) = memberdb::get_guild_rank(&db, &mcid).await {
+        if let Ok(rank) = memberdb::get_guild_rank(&mut db.exe(), &mcid).await {
             content.push_str(&format!("\n**Guild** {}", rank));
         }
     }

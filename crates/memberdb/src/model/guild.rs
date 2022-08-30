@@ -7,7 +7,7 @@ use util::{impl_sqlx_type, ioerr};
 
 use crate::model::member::{MemberId, MemberRank};
 use crate::model::wynn::McId;
-use crate::DB;
+use crate::Executor;
 
 pub const GUILD_RANKS: [GuildRank; 6] = [
     GuildRank::Owner,
@@ -117,9 +117,9 @@ pub struct GuildProfile {
 
 impl GuildProfile {
     /// Convert from `GuildProfileRow`
-    pub async fn from_row(db: &DB, row: GuildProfileRow) -> Result<Self> {
+    pub async fn from_row(exe: &mut Executor<'_>, row: GuildProfileRow) -> Result<Self> {
         let rank = GuildRank::from_str(&row.rank)?;
-        let mid = crate::get_wynn_mid(db, &row.id).await?;
+        let mid = crate::get_wynn_mid(exe, &row.id).await?;
         Ok(Self {
             id: row.id,
             mid,

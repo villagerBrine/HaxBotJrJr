@@ -13,7 +13,9 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use serenity::prelude::TypeMapKey;
 use sqlx::pool::PoolConnection;
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
+use sqlx::query::Map;
+use sqlx::sqlite::{SqliteArguments, SqliteConnectOptions, SqlitePoolOptions, SqliteRow};
+use sqlx::Error;
 use sqlx::{Pool, Sqlite};
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::RwLock;
@@ -44,7 +46,7 @@ impl DB {
     /// Begin a transaction
     pub async fn begin(&self) -> Result<Transaction> {
         let tx = self.pool.begin().await.context("Failed to begin db transaction")?;
-        return Ok(Transaction { tx, signal: self.signal.clone() });
+        Ok(Transaction { tx, signal: self.signal.clone() })
     }
 
     /// Get an event receiver
@@ -55,6 +57,10 @@ impl DB {
     /// Broadcast an event
     pub fn signal(&self, event: DBEvent) {
         self.signal.signal(event);
+    }
+
+    pub fn exe(&self) -> Executor<'_> {
+        Executor::Pool(self)
     }
 }
 
@@ -75,6 +81,52 @@ impl Transaction {
     pub fn signal(&self, event: DBEvent) {
         self.signal.signal(event);
     }
+
+    pub fn exe(&mut self) -> Executor<'_> {
+        Executor::Transaction(self)
+    }
+}
+
+#[derive(Debug)]
+pub enum Executor<'a> {
+    Pool(&'a DB),
+    Transaction(&'a mut Transaction),
+}
+
+type OptionalMap<'q, F> = Map<'q, Sqlite, F, SqliteArguments<'q>>;
+
+macro_rules! query_call {
+    ($self:ident, $query:ident, $method:ident) => {
+        match $self {
+            Executor::Pool(pool) => $query.$method(&pool.pool).await,
+            Executor::Transaction(tx) => $query.$method(&mut tx.tx).await,
+        }
+    };
+}
+
+impl<'a> Executor<'a> {
+    async fn optional<'q, F, O>(&mut self, query: OptionalMap<'q, F>) -> Result<Option<O>, Error>
+    where
+        F: FnMut(SqliteRow) -> Result<O, Error> + Send,
+        O: Send + Unpin,
+    {
+        query_call!(self, query, fetch_optional)
+    }
+
+    async fn one<'q, F, O>(&mut self, query: OptionalMap<'q, F>) -> Result<O, Error>
+    where
+        F: FnMut(SqliteRow) -> Result<O, Error> + Send,
+        O: Send + Unpin,
+    {
+        query_call!(self, query, fetch_one)
+    }
+
+    // fn signa(&self, event: DBEvent) {
+    //     match self {
+    //         Self::Pool(pool) => pool.signal(event),
+    //         Self::Transaction(tx) => tx.signal(event),
+    //     }
+    // }
 }
 
 /// Connect to the database

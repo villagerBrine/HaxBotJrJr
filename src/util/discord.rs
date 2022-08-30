@@ -51,13 +51,13 @@ pub async fn fix_member_nick(
 ) -> Result<Member> {
     let rank = {
         let db = db.read().await;
-        ctx!(memberdb::get_member_rank(&db, mid).await)?
+        ctx!(memberdb::get_member_rank(&mut db.exe(), mid).await)?
     };
     let ign = {
         let db = db.read().await;
-        let (_, mcid) = ctx!(memberdb::get_member_links(&db, mid).await)?;
+        let (_, mcid) = ctx!(memberdb::get_member_links(&mut db.exe(), mid).await)?;
         match mcid {
-            Some(mcid) => memberdb::get_ign(&db, &mcid).await.ok(),
+            Some(mcid) => memberdb::get_ign(&mut db.exe(), &mcid).await.ok(),
             None => None,
         }
     };

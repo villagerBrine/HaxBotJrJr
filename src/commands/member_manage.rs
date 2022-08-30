@@ -48,7 +48,7 @@ profiles on an existing member, use the command `link` instead");
     // Getting initial member rank
     let guild_rank = {
         let db = db.read().await;
-        memberdb::get_guild_rank(&db, &mcid).await
+        memberdb::get_guild_rank(&mut db.exe(), &mcid).await
     };
     let rank = match guild_rank {
         Ok(guild_rank) => guild_rank.to_member_rank(),
@@ -228,7 +228,7 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
             {
                 // checking if there is already a discord profile linked
                 let db = db.read().await;
-                if let Ok(Some(_)) = memberdb::get_discord_mid(&db, discord_id).await {
+                if let Ok(Some(_)) = memberdb::get_discord_mid(&mut db.exe(), discord_id).await {
                     finish!(ctx, msg, "discord user already linked with a member");
                 }
             }
@@ -269,14 +269,14 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
 
             {
                 let db = db.read().await;
-                if let Ok(Some(_)) = memberdb::get_wynn_mid(&db, &mcid).await {
+                if let Ok(Some(_)) = memberdb::get_wynn_mid(&mut db.exe(), &mcid).await {
                     finish!(ctx, msg, "mc account already linked with a member");
                 }
             }
 
             let result = {
                 let db = db.write().await;
-                let rank = match memberdb::get_guild_rank(&db, &mcid).await {
+                let rank = match memberdb::get_guild_rank(&mut db.exe(), &mcid).await {
                     Ok(g_rank) => g_rank.to_member_rank(),
                     Err(_) => memberdb::model::member::INIT_MEMBER_RANK,
                 };
@@ -331,7 +331,7 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
 
     let (old_discord, old_mcid) = {
         let db = db.read().await;
-        ctx!(memberdb::get_member_links(&db, mid).await)?
+        ctx!(memberdb::get_member_links(&mut db.exe(), mid).await)?
     };
 
     match profile_type {
@@ -364,7 +364,7 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
             }
             let member_type = {
                 let db = db.read().await;
-                ctx!(memberdb::get_member_type(&db, mid).await)?
+                ctx!(memberdb::get_member_type(&mut db.exe(), mid).await)?
             };
             if let MemberType::GuildPartial = member_type {
                 finish!(ctx, msg, "You can't unlink wynn profile of a guild partial member")
@@ -416,7 +416,7 @@ pub async fn remove_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
 
     let member_type = {
         let db = db.read().await;
-        memberdb::get_member_type(&db, mid).await?
+        memberdb::get_member_type(&mut db.exe(), mid).await?
     };
     if let MemberType::GuildPartial = member_type {
         finish!(ctx, msg, "You can't remove a guild partial with this command")
@@ -455,10 +455,10 @@ async fn set_rank(
         let discord_id =
             ok!(i64::try_from(msg.author.id.0), cmd_bail!("Failed to convert UserId to DiscordId"));
         let mid = some!(
-            ctx!(memberdb::get_discord_mid(&db, discord_id).await)?,
+            ctx!(memberdb::get_discord_mid(&mut db.exe(), discord_id).await)?,
             finish!(ctx, msg, "Only a member can use this command")
         );
-        ctx!(memberdb::get_member_rank(&db, mid).await)?
+        ctx!(memberdb::get_member_rank(&mut db.exe(), mid).await)?
     };
     if caller_rank <= old_rank {
         finish!(ctx, msg, "You can't change the rank of someone with a higher or equal rank to yours")
@@ -519,7 +519,7 @@ pub async fn set_member_rank(ctx: &Context, msg: &Message, mut args: Args) -> Co
 
     let old_rank = {
         let db = db.read().await;
-        ctx!(memberdb::get_member_rank(&db, mid).await)?
+        ctx!(memberdb::get_member_rank(&mut db.exe(), mid).await)?
     };
 
     set_rank(&ctx, &msg, &db, mid, old_rank, rank).await
@@ -550,7 +550,7 @@ pub async fn promote_member(ctx: &Context, msg: &Message, args: Args) -> Command
 
     let old_rank = {
         let db = db.read().await;
-        ctx!(memberdb::get_member_rank(&db, mid).await)?
+        ctx!(memberdb::get_member_rank(&mut db.exe(), mid).await)?
     };
     let rank = some!(old_rank.promote(), finish!(ctx, msg, "Member is already the highest rank"));
 
@@ -582,7 +582,7 @@ pub async fn demote_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
 
     let old_rank = {
         let db = db.read().await;
-        ctx!(memberdb::get_member_rank(&db, mid).await)?
+        ctx!(memberdb::get_member_rank(&mut db.exe(), mid).await)?
     };
     let rank = some!(old_rank.demote(), finish!(ctx, msg, "Member is already the lowest rank"));
 
@@ -591,8 +591,8 @@ pub async fn demote_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
 
 /// Checks if a member has a linked wynn profile, if so, return Some(ign).
 async fn existing_wynn_link_check(db: &DB, mid: MemberId) -> Option<String> {
-    if let Ok((_, Some(old_mcid))) = memberdb::get_member_links(&db, mid).await {
-        if let Ok(ign) = memberdb::get_ign(&db, &old_mcid).await {
+    if let Ok((_, Some(old_mcid))) = memberdb::get_member_links(&mut db.exe(), mid).await {
+        if let Ok(ign) = memberdb::get_ign(&mut db.exe(), &old_mcid).await {
             return Some(ign);
         }
     }

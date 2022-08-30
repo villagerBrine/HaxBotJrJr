@@ -28,7 +28,7 @@ async fn set_custom_nick(ctx: &Context, msg: &Message, args: Args) -> CommandRes
     let mid = {
         let db = db.read().await;
         some!(
-            ctx!(memberdb::get_discord_mid(&db, discord_id).await)?,
+            ctx!(memberdb::get_discord_mid(&mut db.exe(), discord_id).await)?,
             finish!(ctx, msg, "You aren't a member")
         )
     };
