@@ -41,6 +41,8 @@ impl ConfirmStyle {
     }
 }
 
+/// Ask user for confirmation via message.
+///
 /// Send a message that asks the user for yes or no, and return the answer in boolean.
 /// The message is stop being observed after `timeout` (in seconds) is elapsed.
 pub async fn confirm<C>(
@@ -87,12 +89,16 @@ where
         }
     };
 
-    let choice = if ci.data.custom_id == "YES" { true } else { false };
+    let choice = ci.data.custom_id == "YES";
     Ok(Some((choice, ci)))
 }
 
-/// Send a navigable paged message.
+/// Send a paged message.
+///
+/// Send a navigable paged message using [`Pager`].
 /// The message is stop being observed after `timeout` (in seconds) is elapsed.
+///
+/// [`Pager`]: crate::pager::Pager
 pub async fn page<C, D>(
     ctx: &C, channel_id: &ChannelId, pager: &mut Pager<D, String>, timeout: u64,
 ) -> Result<()>

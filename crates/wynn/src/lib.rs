@@ -1,4 +1,5 @@
 //! Functions for communication with Mojang/Wynncraft API
+#[warn(missing_docs, missing_debug_implementations)]
 pub mod cache;
 pub mod error;
 pub mod loops;

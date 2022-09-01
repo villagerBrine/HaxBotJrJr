@@ -153,7 +153,9 @@ impl<K: Eq + Hash + Clone, T: Tag> Default for TagMap<K, T> {
 /// Tags to be attached on a discord member
 #[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq, Clone)]
 pub enum UserTag {
+    /// Bot won't update the nickname of the tagged.
     NoNickUpdate,
+    /// Bot won't update the roles of the tagged.
     NoRoleUpdate,
 }
 
@@ -183,6 +185,7 @@ impl_debug_display!(UserTag);
 /// Tags to be attached to a discord channel
 #[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq, Clone)]
 pub enum ChannelTag {
+    /// Bot won't track statistics in the tagged channel
     NoTrack,
 }
 
@@ -210,10 +213,15 @@ impl_debug_display!(ChannelTag);
 /// Tags to be attached to a text channel
 #[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq, Clone)]
 pub enum TextChannelTag {
+    /// Bot logs guild member events in tagged channel
     GuildMemberLog,
+    /// Bot logs guild level events in tagged channel
     GuildLevelLog,
+    /// Bot logs guild member xp contribution events in tagged channel
     XpLog,
+    /// Bot logs wynncraft player online status events in tagged channel
     OnlineLog,
+    /// Bot logs weekly stat summaries in tagged channel
     Summary,
 }
 
