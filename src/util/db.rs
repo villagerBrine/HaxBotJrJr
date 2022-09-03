@@ -8,7 +8,9 @@ use serenity::model::guild::{Guild, Member};
 use serenity::model::id::UserId;
 use tokio::sync::RwLock;
 
+use memberdb::model::discord::DiscordId;
 use memberdb::model::member::MemberId;
+use memberdb::model::wynn::McId;
 use memberdb::DB;
 use msgtool::parser::{DiscordObject, TargetObject};
 use util::{ctx, ok, ok_some, some};
@@ -17,13 +19,12 @@ use crate::util::Terminator::{self, *};
 use crate::{t, tfinish, ttry};
 
 /// Given discord id and mc id, return their linked member ids.
-pub async fn get_profile_mids(db: &RwLock<DB>, discord_id: i64, mcid: &str) -> (Option<i64>, Option<i64>) {
+pub async fn get_profile_mids(
+    db: &RwLock<DB>, discord_id: DiscordId, mcid: &McId,
+) -> (Option<MemberId>, Option<MemberId>) {
     let db = db.read().await;
-    let mid1 = ok!(ctx!(memberdb::get_wynn_mid(&mut db.exe(), mcid).await, "Failed to get wynn mid"), None);
-    let mid2 = ok!(
-        ctx!(memberdb::get_discord_mid(&mut db.exe(), discord_id).await, "Failed to get discord mid"),
-        None
-    );
+    let mid1 = ok!(ctx!(mcid.mid(&mut db.exe()).await, "Failed to get wynn mid"), None);
+    let mid2 = ok!(ctx!(discord_id.mid(&mut db.exe()).await, "Failed to get discord mid"), None);
     (mid1, mid2)
 }
 
@@ -31,17 +32,17 @@ pub async fn get_profile_mids(db: &RwLock<DB>, discord_id: i64, mcid: &str) -> (
 /// A discord member is also returned in case if you needs it.
 pub async fn get_profile_ids<'a>(
     ctx: &'a Context, msg: &Message, guild: &'a Guild, client: &Client, discord_name: &'a str, ign: &str,
-) -> Terminator<(Cow<'a, Member>, i64, String)> {
+) -> Terminator<(Cow<'a, Member>, DiscordId, McId)> {
     let discord_member = some!(
         ttry!(util::discord::get_member_named(&ctx.http, guild, discord_name).await),
         tfinish!(ctx, msg, "Failed to find an discord user with the given name")
     );
     let discord_id =
-        ttry!(i64::try_from(discord_member.as_ref().user.id.0), "Failed to convert u64 into i64");
+        ttry!(DiscordId::try_from(discord_member.as_ref().user.id.0), "Failed to convert u64 into i64");
 
     let mcid = ok!(wynn::get_id(client, ign).await, tfinish!(ctx, msg, "Provided mc ign doesn't exist"));
 
-    Proceed((discord_member, discord_id, mcid))
+    Proceed((discord_member, discord_id, McId(mcid)))
 }
 
 /// Parse a target expression into `TargetId`
@@ -57,7 +58,7 @@ pub async fn parse_user_target(
             DiscordObject::Member(member) => TargetId::Discord(member.as_ref().user.id),
             _ => tfinish!(ctx, msg, "Only discord/mc user are accepted as target"),
         },
-        TargetObject::Mc(id) => TargetId::Wynn(id),
+        TargetObject::Mc(id) => TargetId::Wynn(McId(id)),
     })
 }
 
@@ -79,7 +80,7 @@ pub async fn parse_user_target_mid(
 /// Discord user id or mcid
 pub enum TargetId {
     Discord(UserId),
-    Wynn(String),
+    Wynn(McId),
 }
 
 impl TargetId {
@@ -87,10 +88,10 @@ impl TargetId {
     pub async fn get_mid(&self, db: &DB) -> Option<MemberId> {
         match self {
             Self::Discord(id) => {
-                let id = ok!(i64::try_from(*id), return None);
-                ok_some!(memberdb::get_discord_mid(&mut db.exe(), id).await)
+                let id = ok!(DiscordId::try_from(id.0), return None);
+                ok_some!(id.mid(&mut db.exe()).await)
             }
-            Self::Wynn(id) => ok_some!(memberdb::get_wynn_mid(&mut db.exe(), &id).await),
+            Self::Wynn(id) => ok_some!(id.mid(&mut db.exe()).await),
         }
     }
 }

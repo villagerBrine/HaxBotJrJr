@@ -30,8 +30,8 @@ pub type Conn = PoolConnection<Sqlite>;
 #[derive(Debug)]
 /// A database connection
 pub struct DB {
-    pub pool: Pool<Sqlite>,
-    pub signal: DBSignal,
+    pool: Pool<Sqlite>,
+    signal: DBSignal,
 }
 
 impl DB {
@@ -64,11 +64,15 @@ impl DB {
     }
 }
 
+impl TypeMapKey for DB {
+    type Value = Arc<RwLock<DB>>;
+}
+
 #[derive(Debug)]
 /// A database transaction
 pub struct Transaction {
-    pub tx: sqlx::Transaction<'static, Sqlite>,
-    pub signal: DBSignal,
+    tx: sqlx::Transaction<'static, Sqlite>,
+    signal: DBSignal,
 }
 
 impl Transaction {
@@ -120,17 +124,10 @@ impl<'a> Executor<'a> {
     {
         query_call!(self, query, fetch_one)
     }
-
-    // fn signa(&self, event: DBEvent) {
-    //     match self {
-    //         Self::Pool(pool) => pool.signal(event),
-    //         Self::Transaction(tx) => tx.signal(event),
-    //     }
-    // }
 }
 
 /// Connect to the database
-pub async fn connect_db(file: &str, max_conn: u32) -> Pool<Sqlite> {
+async fn connect_db(file: &str, max_conn: u32) -> Pool<Sqlite> {
     let db = SqlitePoolOptions::new()
         .max_connections(max_conn)
         .connect_with(SqliteConnectOptions::new().filename(file).create_if_missing(true))
@@ -141,19 +138,4 @@ pub async fn connect_db(file: &str, max_conn: u32) -> Pool<Sqlite> {
         .await
         .expect("Couldn't run database migrations");
     db
-}
-
-/// Bot data key for `DB`
-pub struct DBContainer;
-
-impl TypeMapKey for DBContainer {
-    type Value = Arc<RwLock<DB>>;
-}
-
-impl DBContainer {
-    /// Create a `DB` container
-    pub async fn new(file: &str, max_conn: u32) -> Arc<RwLock<DB>> {
-        let db = DB::new(file, max_conn).await;
-        Arc::new(RwLock::new(db))
-    }
 }

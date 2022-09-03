@@ -139,7 +139,7 @@ async fn process_db_event(
             let mut member = some!(get_discord_member(&cache_http, &guild, *new).await, return);
             let rank = {
                 let db = db.read().await;
-                ok!(memberdb::get_member_rank(&mut db.exe(), *mid).await, return)
+                ok!(mid.rank(&mut db.exe()).await, return)
             };
             add_init_role_nick(&cache_http.http, &db, &config, *mid, rank, &guild, &mut member).await;
         }
@@ -153,8 +153,9 @@ pub async fn process_wynn_event(
 ) {
     match event {
         WynnEvent::MemberNameChange { id, new_name, .. } => {
+            let mcid = McId(id.clone());
             // Update discord nick due to ign change.
-            let (member, mid) = some!(get_discord_member_mc(&cache_http, &db, id, &guild).await, return);
+            let (member, mid) = some!(get_discord_member_mc(&cache_http, &db, &mcid, &guild).await, return);
 
             {
                 let config = config.read().await;
@@ -165,7 +166,7 @@ pub async fn process_wynn_event(
 
             let rank = {
                 let db = db.read().await;
-                ok!(memberdb::get_member_rank(&mut db.exe(), mid).await, return)
+                ok!(mid.rank(&mut db.exe()).await, return)
             };
             let custom_nick = match &member.nick {
                 Some(nick) => crate::util::discord::extract_custom_nick(nick),
@@ -197,15 +198,15 @@ pub async fn process_discord_event(
                     }
                 }
 
-                let id = ok!(i64::try_from(new.user.id.0), "Failed to convert UserId to DiscordId", return);
+                let id = ok!(DiscordId::try_from(new.user.id.0), return);
                 let mid = {
                     let db = db.read().await;
-                    some!(ok!(memberdb::get_discord_mid(&mut db.exe(), id).await, return), return)
+                    some!(ok!(id.mid(&mut db.exe()).await, return), return)
                 };
                 // Only updates it if the discord nick is using discord username instead of ign
                 let has_wynn = {
                     let db = db.read().await;
-                    ok!(memberdb::get_member_links(&mut db.exe(), mid).await, return).1.is_some()
+                    ok!(mid.links(&mut db.exe()).await, return).1.is_some()
                 };
                 if !has_wynn {
                     if let Err(why) =
@@ -234,14 +235,14 @@ pub async fn get_discord_member_mc(
 ) -> Option<(Member, MemberId)> {
     let mid = {
         let db = db.read().await;
-        match memberdb::get_wynn_mid(&mut db.exe(), mcid).await {
+        match mcid.mid(&mut db.exe()).await {
             Ok(Some(mid)) => mid,
             _ => return None,
         }
     };
     let discord_id = {
         let db = db.read().await;
-        ok!(memberdb::get_member_links(&mut db.exe(), mid).await, return None).0
+        ok!(mid.links(&mut db.exe()).await, return None).0
     };
     if let Some(discord_id) = discord_id {
         return match get_discord_member(&cache_http, &guild, discord_id).await {
@@ -258,7 +259,7 @@ pub async fn get_discord_member_db(
 ) -> Option<Member> {
     let discord_id = {
         let db = db.read().await;
-        ok!(memberdb::get_member_links(&mut db.exe(), mid).await, return None).0
+        ok!(mid.links(&mut db.exe()).await, return None).0
     };
     if let Some(discord_id) = discord_id {
         return get_discord_member(&cache_http, &guild, discord_id).await;
@@ -268,7 +269,7 @@ pub async fn get_discord_member_db(
 
 /// Get discord member via `DiscordId`
 pub async fn get_discord_member(cache_http: &CacheAndHttp, guild: &Guild, id: DiscordId) -> Option<Member> {
-    let user_id = ok!(u64::try_from(id), "Failed to convert DiscordId to UserId", return None);
+    let user_id = ok!(u64::try_from(id.0), "Failed to convert DiscordId to UserId", return None);
     let member = ok!(guild.member(&cache_http, user_id).await, "Failed to get discord member", return None);
     Some(member)
 }

@@ -16,7 +16,9 @@ use event::timer::{TimerEvent, TimerSignal};
 use event::{DiscordContext, DiscordEvent, DiscordSignal, WynnEvent, WynnSignal};
 use util::{ctx, ok, some};
 
+use crate::model::discord::DiscordId;
 use crate::model::guild::GuildRank;
+use crate::model::wynn::McId;
 use crate::voice_tracker::VoiceTracker;
 use crate::DB;
 
@@ -93,9 +95,10 @@ pub async fn start_loops(
 async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Vec<WynnEvent>> {
     match event {
         WynnEvent::MemberJoin { id, rank, ign, xp } => {
+            let mcid = McId(id.clone());
             let mid = {
                 let db = db.read().await;
-                ok!(crate::get_wynn_mid(&mut db.exe(), id).await, "Failed to get wynn.mid", return None)
+                ok!(mcid.mid(&mut db.exe()).await, "Failed to get wynn.mid", return None)
             };
 
             match mid {
@@ -103,8 +106,8 @@ async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Vec<Wy
                 Some(_) => {
                     let (old_ign, old_rank) = {
                         let db = db.read().await;
-                        let old_ign = crate::get_ign(&mut db.exe(), id).await;
-                        let old_rank = crate::get_guild_rank(&mut db.exe(), id).await;
+                        let old_ign = mcid.ign(&mut db.exe()).await;
+                        let old_rank = mcid.rank(&mut db.exe()).await;
                         (old_ign, old_rank)
                     };
 
@@ -138,16 +141,16 @@ async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Vec<Wy
                     let db = db.write().await;
                     let mut tx = ok!(ctx!(db.begin().await), return None);
                     // Bind guild profile as member has joined the guild
-                    if let Ok(false) = ctx!(crate::is_in_guild(&mut tx.exe(), id).await) {
+                    if let Ok(false) = ctx!(mcid.in_guild(&mut tx.exe()).await) {
                         info!(%id, %rank, %ign, "Binding guild profile");
                         let rank = ok!(ctx!(GuildRank::from_api(rank)), return None);
                         let _ = ctx!(
-                            crate::bind_wynn_guild(&mut tx, id, ign, true, rank).await,
+                            mcid.bind_guild(&mut tx, ign, true, rank).await,
                             "Failed to bind guild profile",
                         );
 
                         info!(%id, xp, "Updates new guild member's xp");
-                        ok!(crate::update_xp(&mut tx, id, *xp).await, "Failed to update xp", return None);
+                        ok!(mcid.update_xp(&mut tx, *xp).await, "Failed to update xp", return None);
                     }
                     let _ = ctx!(tx.commit().await);
 
@@ -162,7 +165,7 @@ async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Vec<Wy
                     let mut tx = ok!(ctx!(db.begin().await), return None);
 
                     ok!(
-                        crate::bind_wynn_guild(&mut tx, id, ign, true, rank).await,
+                        mcid.bind_guild(&mut tx, ign, true, rank).await,
                         "Failed to add guild member",
                         return None
                     );
@@ -172,67 +175,55 @@ async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Vec<Wy
                     // player can reach here is to leave the guild and then rejoin, thus the
                     // following operation won't duplicate their xp as it has been reset.
                     info!(%id, xp, "Updates new guild member's xp");
-                    ok!(crate::update_xp(&mut tx, id, *xp).await, "Failed to update xp", return None);
+                    ok!(mcid.update_xp(&mut tx, *xp).await, "Failed to update xp", return None);
 
                     let _ = ctx!(tx.commit().await);
                 }
             }
         }
         WynnEvent::MemberLeave { id, rank, ign } => {
+            let mcid = McId(id.clone());
             info!(%id, %rank, %ign, "Removing guild member");
             let rank = ok!(ctx!(GuildRank::from_api(rank)), return None);
             let db = db.write().await;
             let mut tx = ok!(ctx!(db.begin().await), return None);
             ok!(
-                crate::bind_wynn_guild(&mut tx, id, ign, false, rank).await,
+                mcid.bind_guild(&mut tx, ign, false, rank).await,
                 "Failed to unbind guild profile",
                 return None
             );
             let _ = ctx!(tx.commit().await);
         }
         WynnEvent::MemberRankChange { id, old_rank, new_rank, ign } => {
+            let mcid = McId(id.clone());
             info!(ign, %old_rank, %new_rank, "Updating guild member guild rank");
             let rank = ok!(GuildRank::from_api(new_rank), "Error", return None);
             let db = db.write().await;
             let mut tx = ok!(ctx!(db.begin().await), return None);
-            ok!(
-                crate::update_guild_rank(&mut tx, id, rank).await,
-                "Failed to update guild member guild rank",
-                return None
-            );
+            ok!(mcid.set_rank(&mut tx, rank).await, "Failed to update guild member guild rank", return None);
             let _ = ctx!(tx.commit().await);
         }
         WynnEvent::MemberNameChange { id, new_name, .. } => {
+            let mcid = McId(id.clone());
             info!(%id, %new_name, "Updating guild member ign");
             let db = db.write().await;
             let mut tx = ok!(ctx!(db.begin().await), return None);
-            ok!(
-                crate::update_ign(&mut tx, id, new_name).await,
-                "Failed to update guild member ign",
-                return None
-            );
+            ok!(mcid.set_ign(&mut tx, new_name).await, "Failed to update guild member ign", return None);
             let _ = ctx!(tx.commit().await);
         }
         WynnEvent::MemberContribute { id, old_contrib, new_contrib, ign } => {
+            let mcid = McId(id.clone());
             let amount = new_contrib - old_contrib;
             info!(ign, amount, "Updating guild member xp");
             let db = db.write().await;
             let mut tx = ok!(ctx!(db.begin().await), return None);
-            ok!(
-                crate::update_xp(&mut tx, id, amount).await,
-                "Failed to increment guild member xp",
-                return None
-            );
+            ok!(mcid.update_xp(&mut tx, amount).await, "Failed to increment guild member xp", return None);
             let _ = ctx!(tx.commit().await);
         }
         WynnEvent::PlayerStay { ign, world: _world, elapsed } => {
             let id = {
                 let db = db.read().await;
-                ok!(
-                    crate::get_ign_mcid(&mut db.exe(), ign).await,
-                    "Failed to get id of ign from db",
-                    return None
-                )
+                ok!(McId::from_ign(&mut db.exe(), ign).await, "Failed to get id of ign from db", return None)
             };
             if let Some(id) = id {
                 let db = db.write().await;
@@ -243,7 +234,7 @@ async fn process_wynn_event(db: &RwLock<DB>, event: &WynnEvent) -> Option<Vec<Wy
                 );
                 let mut tx = ok!(ctx!(db.begin().await), return None);
                 ok!(
-                    crate::update_activity(&mut tx, &id, elapsed).await,
+                    id.update_activity(&mut tx, elapsed).await,
                     "Failed to update wynn activity",
                     return None
                 );
@@ -275,19 +266,15 @@ async fn process_discord_event(
                 }
             }
 
-            let id = ok!(i64::try_from(message.author.id), "Failed to convert UserId to DiscordId", return);
+            let id = ok!(DiscordId::try_from(message.author.id.0), return);
             let mid = {
                 let db = db.read().await;
-                ok!(crate::get_discord_mid(&mut db.exe(), id).await, return)
+                ok!(id.mid(&mut db.exe()).await, return)
             };
             if mid.is_some() {
                 let db = db.write().await;
                 let mut tx = ok!(ctx!(db.begin().await), return);
-                ok!(
-                    crate::update_message(&mut tx, 1, id).await,
-                    "Failed to update discord message stat",
-                    return
-                );
+                ok!(id.update_message(&mut tx, 1).await, "Failed to update discord message stat", return);
                 let _ = ctx!(tx.commit().await);
             }
         }
@@ -379,19 +366,15 @@ async fn process_discord_event(
             if *guild_id == ctx.main_guild.id {
                 let mid = {
                     let db = db.read().await;
-                    let id = ok!(i64::try_from(user.id.0), return);
-                    ok!(ctx!(crate::get_discord_mid(&mut db.exe(), id).await), return)
+                    let id = ok!(DiscordId::try_from(user.id.0), return);
+                    ok!(ctx!(id.mid(&mut db.exe()).await), return)
                 };
 
                 if let Some(mid) = mid {
-                    info!(mid, discord = user.id.0, "User left discord guild, unbinding discord profile");
+                    info!(?mid, discord = user.id.0, "User left discord guild, unbinding discord profile");
                     let db = db.write().await;
                     let mut tx = ok!(ctx!(db.begin().await), return);
-                    ok!(
-                        crate::bind_discord(&mut tx, mid, None).await,
-                        "Failed to unbind discord profile",
-                        return
-                    );
+                    ok!(mid.bind_discord(&mut tx, None).await, "Failed to unbind discord profile", return);
                     let _ = ctx!(tx.commit().await);
                 }
             }
@@ -403,11 +386,11 @@ async fn process_discord_event(
 /// Update a discord user's voice tracking in database
 async fn track_voice_db(db: &RwLock<DB>, user_id: u64, dur: Duration) {
     let dur = ok!(i64::try_from(dur.as_secs()), "Failed to convert u64 to i64 (duration)", return);
-    let discord_id = ok!(i64::try_from(user_id), "Failed to convert u64 to i64 (id)", return);
+    let discord_id = ok!(DiscordId::try_from(user_id), "Failed to convert u64 to i64 (id)", return);
 
     let db = db.write().await;
     let mut tx = ok!(ctx!(db.begin().await), return);
-    if let Err(why) = crate::update_voice(&mut tx, dur, discord_id).await {
+    if let Err(why) = discord_id.update_voice(&mut tx, dur).await {
         error!("Failed to update voice chat activity stat: {:#}", why);
     }
     let _ = ctx!(tx.commit().await);

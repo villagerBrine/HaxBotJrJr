@@ -97,7 +97,7 @@ impl FromStr for GuildRank {
 /// Use this to query entire guild profile from database, and convert it to `GuildProfile` with more
 /// convenient field values.
 pub struct GuildProfileRow {
-    pub id: McId,
+    pub id: String,
     pub rank: String,
     pub xp: i64,
     pub xp_week: i64,
@@ -119,9 +119,10 @@ impl GuildProfile {
     /// Convert from `GuildProfileRow`
     pub async fn from_row(exe: &mut Executor<'_>, row: GuildProfileRow) -> Result<Self> {
         let rank = GuildRank::from_str(&row.rank)?;
-        let mid = crate::get_wynn_mid(exe, &row.id).await?;
+        let id = McId(row.id);
+        let mid = id.mid(exe).await?;
         Ok(Self {
-            id: row.id,
+            id,
             mid,
             rank,
             xp: row.xp,

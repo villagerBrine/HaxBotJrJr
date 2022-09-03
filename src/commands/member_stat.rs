@@ -5,6 +5,7 @@ use serenity::framework::standard::macros::command;
 use serenity::framework::standard::{Args, CommandResult};
 use serenity::model::channel::Message;
 
+use memberdb::model::discord::DiscordId;
 use memberdb::query::{Filter, Sort, Stat};
 use memberdb::utils::{FilterSortWrap, SelectableWrap};
 use msgtool::pager::Pager;
@@ -45,7 +46,7 @@ async fn display_profile(ctx: &Context, msg: &Message, args: Args) -> CommandRes
         let db = db.read().await;
         match target {
             TargetId::Discord(id) => {
-                let id = ctx!(i64::try_from(id.0), "Failed to convert u64 into i64")?;
+                let id = DiscordId::try_from(id.0)?;
                 memberdb::utils::get_profiles_discord(&db, id).await
             }
             TargetId::Wynn(id) => memberdb::utils::get_profiles_mc(&db, &id).await,
@@ -246,7 +247,7 @@ async fn display_member_info(ctx: &Context, msg: &Message, args: Args) -> Comman
     let member = {
         let db = db.read().await;
         some!(
-            ctx!(memberdb::get_member(&mut db.exe(), mid).await, "Failed to get member from db")?,
+            ctx!(mid.get(&mut db.exe()).await, "Failed to get member from db")?,
             cmd_bail!("Failed to get member from db")
         )
     };
@@ -256,10 +257,10 @@ async fn display_member_info(ctx: &Context, msg: &Message, args: Args) -> Comman
 
     if let Some(mcid) = member.mcid {
         let db = db.read().await;
-        let ign = ctx!(memberdb::get_ign(&mut db.exe(), &mcid).await, "Failed to get wynn.ign")?;
+        let ign = ctx!(mcid.ign(&mut db.exe()).await, "Failed to get wynn.ign")?;
         content.push_str(&format!("\n**Minecraft** {} `{}`", ign, mcid));
 
-        if let Ok(rank) = memberdb::get_guild_rank(&mut db.exe(), &mcid).await {
+        if let Ok(rank) = mcid.rank(&mut db.exe()).await {
             content.push_str(&format!("\n**Guild** {}", rank));
         }
     }

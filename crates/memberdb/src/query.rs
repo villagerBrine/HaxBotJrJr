@@ -11,6 +11,7 @@ use sqlx::Row;
 
 use util::ioerr;
 
+use crate::model::discord::DiscordId;
 use crate::model::guild::{GuildRank, GUILD_RANKS};
 use crate::model::member::{MemberRank, MemberType, ProfileType, MEMBER_RANKS};
 
@@ -518,7 +519,7 @@ impl Selectable for MemberName {
         match row.get(Column::WIgn.get_ident()) {
             Some(ign) => ign,
             None => match row
-                .get::<Option<i64>, &str>("discord")
+                .get::<Option<DiscordId>, &str>("discord")
                 .map(|id| crate::utils::to_user(cache, id))
             {
                 Some(Some(u)) => format!("{}#{}", u.name, u.discriminator),

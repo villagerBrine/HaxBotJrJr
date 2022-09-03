@@ -10,7 +10,15 @@ use util::{impl_sqlx_type, ioerr};
 use crate::model::discord::DiscordId;
 use crate::model::wynn::McId;
 
-pub type MemberId = i64;
+#[derive(sqlx::Type, Debug, Clone, Copy, PartialEq, Eq)]
+#[sqlx(transparent)]
+pub struct MemberId(pub i64);
+
+impl fmt::Display for MemberId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(sqlx::Type, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 /// Member ranks.
@@ -239,9 +247,9 @@ impl FromStr for ProfileType {
 /// Use this to query entire member from database, and convert it to `Member` with more
 /// convenient field values.
 pub struct MemberRow {
-    pub id: MemberId,
-    pub discord: Option<DiscordId>,
-    pub mcid: Option<McId>,
+    pub id: i64,
+    pub discord: Option<i64>,
+    pub mcid: Option<String>,
     pub member_type: String,
     pub rank: String,
 }
@@ -264,9 +272,9 @@ impl Member {
         let rank = MemberRank::decode(&row.rank)?;
         let member_type = MemberType::from_str(&row.member_type)?;
         Ok(Member {
-            id: row.id,
-            discord: row.discord,
-            mcid: row.mcid,
+            id: MemberId(row.id),
+            discord: row.discord.map(|id| DiscordId(id)),
+            mcid: row.mcid.map(|id| McId(id)),
             member_type,
             rank,
         })

@@ -1,7 +1,6 @@
 //! Dev util commands
 use std::process::Command;
 
-use anyhow::Context as AHContext;
 use serenity::client::Context;
 use serenity::framework::standard::macros::command;
 use serenity::framework::standard::{Args, CommandResult};
@@ -43,72 +42,9 @@ async fn check_db_integrity(ctx: &Context, msg: &Message, _: Args) -> CommandRes
 
     {
         let db = db.read().await;
-        // Check if member type mismatches linked profiles
-        let rows = sqlx::query!(
-            "SELECT oid FROM member WHERE \
-                                (discord NOT NULL AND mcid NOT NULL AND type!='full') OR \
-                                (discord NOT NULL AND mcid IS NULL AND type!='discord') OR \
-                                (discord IS NULL AND mcid NOT NULL AND \
-                                    NOT (SELECT guild FROM wynn WHERE id=member.mcid) AND type!='wynn') OR \
-                                (discord IS NULL AND mcid NOT NULL AND \
-                                    (SELECT guild FROM wynn WHERE id=member.mcid) AND type!='guild')"
-        )
-        .fetch_all(&db.pool)
-        .await
-        .context("")?;
-
-        if !rows.is_empty() {
-            send!(ctx, msg, format!("member wrong member type: {:?}", rows));
-        }
-
-        // Checks if member has no linked profiles
-        let rows = sqlx::query!("SELECT oid FROM member WHERE (discord IS NULL AND mcid IS NULL)")
-            .fetch_all(&db.pool)
-            .await
-            .context("")?;
-
-        if !rows.is_empty() {
-            send!(ctx, msg, format!("member no links: {:?}", rows));
-        }
-
-        // Checks if profile link lead to nonexistence profile
-        let rows = sqlx::query!("SELECT oid FROM member WHERE \
-                                (discord NOT NULL AND NOT EXISTS (SELECT 1 FROM discord WHERE id=member.discord AND mid=member.oid)) OR \
-                                (mcid NOT NULL AND NOT EXISTS (SELECT 1 FROM wynn WHERE id=member.mcid AND mid=member.oid))")
-            .fetch_all(&db.pool)
-            .await
-            .context("")?;
-
-        if !rows.is_empty() {
-            send!(ctx, msg, format!("member dangling link: {:?}", rows));
-        }
-    }
-
-    {
-        let db = db.read().await;
-        // Checks if member link lead to nonexistence member
-        let rows = sqlx::query!("SELECT id FROM discord WHERE \
-                                 mid NOT NULL AND NOT EXISTS (SELECT 1 FROM member WHERE oid=discord.mid AND discord=discord.id)")
-            .fetch_all(&db.pool)
-            .await
-            .context("")?;
-
-        if !rows.is_empty() {
-            send!(ctx, msg, format!("discord dangling mid: {:?}", rows));
-        }
-    }
-
-    {
-        let db = db.read().await;
-        // Checks if member link lead to nonexistence member
-        let rows = sqlx::query!("SELECT id FROM wynn WHERE \
-                                 mid NOT NULL AND NOT EXISTS (SELECT 1 FROM member WHERE oid=wynn.mid AND mcid=wynn.id)")
-            .fetch_all(&db.pool)
-            .await
-            .context("")?;
-
-        if !rows.is_empty() {
-            send!(ctx, msg, format!("wynn dangling mid: {:?}", rows));
+        let issues = memberdb::utils::check_integrity(&db).await?;
+        if !issues.is_empty() {
+            send!(ctx, msg, issues.join("\n"));
         }
     }
 

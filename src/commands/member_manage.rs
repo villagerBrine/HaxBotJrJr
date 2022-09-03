@@ -5,7 +5,9 @@ use serenity::model::channel::Message;
 use tokio::sync::RwLock;
 
 use memberdb::events::DBEvent;
+use memberdb::model::discord::DiscordId;
 use memberdb::model::member::{MemberId, MemberRank, MemberType, ProfileType};
+use memberdb::model::wynn::McId;
 use memberdb::DB;
 use util::{ctx, ok, some};
 
@@ -48,7 +50,7 @@ profiles on an existing member, use the command `link` instead");
     // Getting initial member rank
     let guild_rank = {
         let db = db.read().await;
-        memberdb::get_guild_rank(&mut db.exe(), &mcid).await
+        mcid.rank(&mut db.exe()).await
     };
     let rank = match guild_rank {
         Ok(guild_rank) => guild_rank.to_member_rank(),
@@ -65,7 +67,7 @@ profiles on an existing member, use the command `link` instead");
         let db = db.write().await;
         let mut tx = ctx!(db.begin().await)?;
         let r =
-            ctx!(memberdb::add_member(&mut tx, discord_id, &mcid, &ign, rank).await, "Failed to add member");
+            ctx!(MemberId::add_member(&mut tx, discord_id, &mcid, &ign, rank).await, "Failed to add member");
         if r.is_ok() {
             ctx!(tx.commit().await)?;
         }
@@ -133,7 +135,7 @@ unlink one of them first, then call this command again"
             let db = db.write().await;
             let mut tx = ctx!(db.begin().await)?;
             let r = ctx!(
-                memberdb::bind_discord(&mut tx, mid, Some(discord_id)).await,
+                mid.bind_discord(&mut tx, Some(discord_id)).await,
                 "Failed to link discord profile to member"
             );
             if r.is_ok() {
@@ -166,7 +168,7 @@ unlink one of them first, then call this command again"
             let db = db.write().await;
             let mut tx = ctx!(db.begin().await)?;
             let r = ctx!(
-                memberdb::bind_wynn(&mut tx, mid, Some(&mcid), &ign).await,
+                mid.bind_wynn(&mut tx, Some(&mcid), &ign).await,
                 "Failed to link wynn profile to member"
             );
             if r.is_ok() {
@@ -220,15 +222,12 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
                 ctx!(util::discord::get_member_named(&ctx.http, &guild, target_arg).await)?,
                 finish!(ctx, msg, "Failed to find discord user of given name")
             );
-            let discord_id = ok!(
-                i64::try_from(discord_member.as_ref().user.id.0),
-                cmd_bail!("Failed to convert UserId into DiscordId")
-            );
+            let discord_id = DiscordId::try_from(discord_member.as_ref().user.id.0)?;
 
             {
                 // checking if there is already a discord profile linked
                 let db = db.read().await;
-                if let Ok(Some(_)) = memberdb::get_discord_mid(&mut db.exe(), discord_id).await {
+                if let Ok(Some(_)) = discord_id.mid(&mut db.exe()).await {
                     finish!(ctx, msg, "discord user already linked with a member");
                 }
             }
@@ -245,7 +244,7 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
                 let db = db.write().await;
                 let mut tx = ctx!(db.begin().await)?;
                 let r = ctx!(
-                    memberdb::add_member_discord(&mut tx, discord_id, rank).await,
+                    MemberId::add_discord_partial(&mut tx, discord_id, rank).await,
                     "Failed to add discord partial member"
                 );
                 if r.is_ok() {
@@ -266,23 +265,24 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
         ProfileType::Wynn => {
             let mcid =
                 ok!(wynn::get_id(&client, target_arg).await, finish!(ctx, msg, "Provided ign doesn't exist"));
+            let mcid = McId(mcid);
 
             {
                 let db = db.read().await;
-                if let Ok(Some(_)) = memberdb::get_wynn_mid(&mut db.exe(), &mcid).await {
+                if let Ok(Some(_)) = mcid.mid(&mut db.exe()).await {
                     finish!(ctx, msg, "mc account already linked with a member");
                 }
             }
 
             let result = {
                 let db = db.write().await;
-                let rank = match memberdb::get_guild_rank(&mut db.exe(), &mcid).await {
+                let rank = match mcid.rank(&mut db.exe()).await {
                     Ok(g_rank) => g_rank.to_member_rank(),
                     Err(_) => memberdb::model::member::INIT_MEMBER_RANK,
                 };
                 let mut tx = ctx!(db.begin().await)?;
                 let r = ctx!(
-                    memberdb::add_member_wynn(&mut tx, &mcid, rank, &target_arg).await,
+                    MemberId::add_wynn_partial(&mut tx, &mcid, rank, &target_arg).await,
                     "Failed to add wynn partial member"
                 );
                 if r.is_ok() {
@@ -331,7 +331,7 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
 
     let (old_discord, old_mcid) = {
         let db = db.read().await;
-        ctx!(memberdb::get_member_links(&mut db.exe(), mid).await)?
+        ctx!(mid.links(&mut db.exe()).await)?
     };
 
     match profile_type {
@@ -344,7 +344,7 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
                 let db = db.write().await;
                 let mut tx = ctx!(db.begin().await)?;
                 let r = ctx!(
-                    memberdb::bind_discord(&mut tx, mid, None).await,
+                    mid.bind_discord(&mut tx, None).await,
                     "Failed to unbind discord profile from member"
                 );
                 if r.is_ok() {
@@ -364,7 +364,7 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
             }
             let member_type = {
                 let db = db.read().await;
-                ctx!(memberdb::get_member_type(&mut db.exe(), mid).await)?
+                ctx!(mid.kind(&mut db.exe()).await)?
             };
             if let MemberType::GuildPartial = member_type {
                 finish!(ctx, msg, "You can't unlink wynn profile of a guild partial member")
@@ -373,10 +373,8 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
             let result = {
                 let db = db.write().await;
                 let mut tx = ctx!(db.begin().await)?;
-                let r = ctx!(
-                    memberdb::bind_wynn(&mut tx, mid, None, "").await,
-                    "Failed to unbind wynn profile from member"
-                );
+                let r =
+                    ctx!(mid.bind_wynn(&mut tx, None, "").await, "Failed to unbind wynn profile from member");
                 if r.is_ok() {
                     ctx!(tx.commit().await)?;
                 }
@@ -416,7 +414,7 @@ pub async fn remove_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
 
     let member_type = {
         let db = db.read().await;
-        memberdb::get_member_type(&mut db.exe(), mid).await?
+        mid.kind(&mut db.exe()).await?
     };
     if let MemberType::GuildPartial = member_type {
         finish!(ctx, msg, "You can't remove a guild partial with this command")
@@ -425,7 +423,7 @@ pub async fn remove_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
     let result = {
         let db = db.write().await;
         let mut tx = ctx!(db.begin().await)?;
-        let r = ctx!(memberdb::remove_member(&mut tx, mid).await, "Failed to remove member");
+        let r = ctx!(mid.remove(&mut tx).await, "Failed to remove member");
         if r.is_ok() {
             ctx!(tx.commit().await)?;
         }
@@ -444,7 +442,7 @@ pub async fn remove_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
 
 /// Set a member's rank
 async fn set_rank(
-    ctx: &Context, msg: &Message, db: &RwLock<DB>, mid: i64, old_rank: MemberRank, rank: MemberRank,
+    ctx: &Context, msg: &Message, db: &RwLock<DB>, mid: MemberId, old_rank: MemberRank, rank: MemberRank,
 ) -> CommandResult {
     if old_rank == rank {
         finish!(ctx, msg, "Member is already specified rank");
@@ -452,13 +450,12 @@ async fn set_rank(
 
     let caller_rank = {
         let db = db.read().await;
-        let discord_id =
-            ok!(i64::try_from(msg.author.id.0), cmd_bail!("Failed to convert UserId to DiscordId"));
+        let discord_id = DiscordId::try_from(msg.author.id.0)?;
         let mid = some!(
-            ctx!(memberdb::get_discord_mid(&mut db.exe(), discord_id).await)?,
+            ctx!(discord_id.mid(&mut db.exe()).await)?,
             finish!(ctx, msg, "Only a member can use this command")
         );
-        ctx!(memberdb::get_member_rank(&mut db.exe(), mid).await)?
+        ctx!(mid.rank(&mut db.exe()).await)?
     };
     if caller_rank <= old_rank {
         finish!(ctx, msg, "You can't change the rank of someone with a higher or equal rank to yours")
@@ -470,7 +467,7 @@ async fn set_rank(
     let result = {
         let db = db.write().await;
         let mut tx = ctx!(db.begin().await)?;
-        let r = memberdb::update_member_rank(&mut tx, mid, rank).await;
+        let r = mid.set_rank(&mut tx, rank).await;
         if r.is_ok() {
             ctx!(tx.commit().await)?;
         }
@@ -519,7 +516,7 @@ pub async fn set_member_rank(ctx: &Context, msg: &Message, mut args: Args) -> Co
 
     let old_rank = {
         let db = db.read().await;
-        ctx!(memberdb::get_member_rank(&mut db.exe(), mid).await)?
+        ctx!(mid.rank(&mut db.exe()).await)?
     };
 
     set_rank(&ctx, &msg, &db, mid, old_rank, rank).await
@@ -550,7 +547,7 @@ pub async fn promote_member(ctx: &Context, msg: &Message, args: Args) -> Command
 
     let old_rank = {
         let db = db.read().await;
-        ctx!(memberdb::get_member_rank(&mut db.exe(), mid).await)?
+        ctx!(mid.rank(&mut db.exe()).await)?
     };
     let rank = some!(old_rank.promote(), finish!(ctx, msg, "Member is already the highest rank"));
 
@@ -582,7 +579,7 @@ pub async fn demote_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
 
     let old_rank = {
         let db = db.read().await;
-        ctx!(memberdb::get_member_rank(&mut db.exe(), mid).await)?
+        ctx!(mid.rank(&mut db.exe()).await)?
     };
     let rank = some!(old_rank.demote(), finish!(ctx, msg, "Member is already the lowest rank"));
 
@@ -591,8 +588,8 @@ pub async fn demote_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
 
 /// Checks if a member has a linked wynn profile, if so, return Some(ign).
 async fn existing_wynn_link_check(db: &DB, mid: MemberId) -> Option<String> {
-    if let Ok((_, Some(old_mcid))) = memberdb::get_member_links(&mut db.exe(), mid).await {
-        if let Ok(ign) = memberdb::get_ign(&mut db.exe(), &old_mcid).await {
+    if let Ok((_, Some(old_mcid))) = mid.links(&mut db.exe()).await {
+        if let Ok(ign) = old_mcid.ign(&mut db.exe()).await {
             return Some(ign);
         }
     }

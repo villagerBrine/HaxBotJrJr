@@ -13,6 +13,7 @@ use serenity::model::guild::{Guild, Member, Role};
 use serenity::model::id::{RoleId, UserId};
 use tokio::sync::RwLock;
 
+use memberdb::model::wynn::McId;
 use memberdb::DB;
 use util::discord::PublicChannel;
 use util::ok;
@@ -87,10 +88,10 @@ impl<'a> TargetObject<'a> {
                 // Tries to get mcid from database first, if fails, then mojang api is used
                 let id = {
                     let db = db.read().await;
-                    memberdb::get_ign_mcid(&mut db.exe(), name).await?
+                    McId::from_ign(&mut db.exe(), name).await?
                 };
                 match id {
-                    Some(id) => Ok(Self::Mc(id)),
+                    Some(McId(id)) => Ok(Self::Mc(id)),
                     None => {
                         let id = ok!(
                             wynn::get_id(client, name).await,

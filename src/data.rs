@@ -11,7 +11,7 @@ use tokio::sync::{Mutex, RwLock};
 use config::Config;
 use event::timer::TimerSignal;
 use event::{DiscordSignal, WynnSignal};
-use memberdb::{DBContainer, DB};
+use memberdb::DB;
 use wynn::cache::Cache;
 
 #[derive(Debug, Clone)]
@@ -33,8 +33,10 @@ impl BotData {
         let wynn_cache = Arc::new(Cache::new().await.expect("Failed to read wynn cache files"));
         let config = Config::new(config_file).expect("Failed to read config file");
         let config = Arc::new(RwLock::new(config));
+        let db = DB::new(member_db_file, 5).await;
+        let db = Arc::new(RwLock::new(db));
         Self {
-            db: DBContainer::new(member_db_file, 5).await,
+            db,
             config,
             reqwest_client: ReqClientContainer::new().await,
             wynn_signal: WynnSignal::new(64),
@@ -48,7 +50,7 @@ impl BotData {
     /// Added data to client
     pub async fn add_to_client(&self, client: &Client) {
         let mut data = client.data.write().await;
-        data.insert::<DBContainer>(self.db.clone());
+        data.insert::<DB>(self.db.clone());
         data.insert::<Config>(self.config.clone());
         data.insert::<ReqClientContainer>(self.reqwest_client.clone());
         data.insert::<Cache>(self.wynn_cache.clone());

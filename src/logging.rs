@@ -207,7 +207,7 @@ pub async fn start_summary_loop(
         info!("Starting weekly summary loop");
         let mut receiver = {
             let db = db.read().await;
-            db.signal.connect()
+            db.connect()
         };
         loop {
             let event =

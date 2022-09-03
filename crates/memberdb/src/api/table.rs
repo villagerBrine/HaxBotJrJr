@@ -1,14 +1,16 @@
 //! Functions that fetches multiple rows from database
 use std::cmp::Ordering;
 
-use crate::query::{
-    Column, Filter, MemberName, QueryAction, QueryBuilder, SelectAction, Selectable, Sort, Stat,
-};
-use crate::DB;
 use anyhow::Result;
 use serenity::client::Cache;
 use sqlx::sqlite::SqliteRow;
 use sqlx::Row;
+
+use crate::model::discord::DiscordId;
+use crate::query::{
+    Column, Filter, MemberName, QueryAction, QueryBuilder, SelectAction, Selectable, Sort, Stat,
+};
+use crate::DB;
 
 /// Return all members as list with optional filter applied.
 /// Each member is represented as a list with following structure: [ign, discord name, member rank]
@@ -31,7 +33,10 @@ pub async fn list_members(cache: &Cache, db: &DB, filters: &Vec<Filter>) -> Resu
             // ign
             Column::WIgn.get_formatted(&r, &cache),
             // discord name
-            match r.get::<Option<i64>, &str>("discord").map(|id| crate::utils::to_user(cache, id)) {
+            match r
+                .get::<Option<DiscordId>, &str>("discord")
+                .map(|id| crate::utils::to_user(cache, id))
+            {
                 Some(Some(u)) => format!("{}#{}", u.name, u.discriminator),
                 _ => String::new(),
             },

@@ -18,6 +18,24 @@
     },
     "query": "SELECT id FROM wynn WHERE ign=?"
   },
+  "0867638add34b246240486c8c3f3a05b01f68c4cbc0bc3df9dc06f2e5cf67750": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT id FROM wynn WHERE\n            guild AND EXISTS (SELECT 1 FROM guild WHERE id=wynn.id) \n                AND NOT EXISTS (SELECT 1 FROM guild WHERE mid=wynn.mid)"
+  },
   "121138205bc75c206d62b41de0e65e52b1ebd46c1a2e7d0a96e88a802f0e410e": {
     "describe": {
       "columns": [],
@@ -73,6 +91,24 @@
       }
     },
     "query": "SELECT oid FROM member WHERE (discord IS NULL AND mcid IS NULL)"
+  },
+  "265ab636f7e15e2725f2d820dd4891d6c737a26c6ea7ea1bc9cdffd3dc0ada61": {
+    "describe": {
+      "columns": [
+        {
+          "name": "rowid",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT oid FROM member WHERE \n            (discord NOT NULL AND NOT EXISTS (SELECT 1 FROM discord WHERE id=member.discord AND mid=member.oid)) OR \n            (mcid NOT NULL AND NOT EXISTS (SELECT 1 FROM wynn WHERE id=member.mcid AND mid=member.oid))"
   },
   "2876039b6e67b084e42d02fea15a903ab7179d7d74d37264ba460418535f59b4": {
     "describe": {
@@ -456,6 +492,24 @@
     },
     "query": "INSERT INTO member (discord,mcid,type,rank) VALUES (?,?,?,?)"
   },
+  "6ff15d541f56f4147624b846cfa333b858dc9c89b3a59fdf4fb0cbfca11238d5": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT id FROM wynn WHERE\n            guild AND NOT EXISTS (SELECT 1 FROM guild WHERE id=wynn.id)"
+  },
   "720c2eeb90c9d270597f19467f00683d87846505718f68e3823c2d3b15a0e17b": {
     "describe": {
       "columns": [],
@@ -538,6 +592,24 @@
     },
     "query": "SELECT type AS member_type FROM member WHERE oid=?"
   },
+  "85afe95a31b6644bfb2f5a103e6de4a7eec0de8b6afd3fad514a5678d8b81d73": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT id FROM discord WHERE\n            mid NOT NULL AND NOT EXISTS (SELECT 1 FROM member WHERE oid=discord.mid AND discord=discord.id)"
+  },
   "87189cfff5ffd849a33ac2fcfe5bba6fa4c01a1b5148f9fa4813b0afae621aaf": {
     "describe": {
       "columns": [
@@ -574,24 +646,6 @@
     },
     "query": "SELECT discord FROM member where oid=?"
   },
-  "932c25f8dac23c11da864098614a2fbce85b353ed426a85c557a95a4e3ac039f": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Right": 0
-      }
-    },
-    "query": "SELECT id FROM wynn WHERE guild AND NOT EXISTS (SELECT 1 FROM guild WHERE id=wynn.id) OR NOT guild AND EXISTS (SELECT 1 FROM guild WHERE id=wynn.id)"
-  },
   "944e4cdde37389843fd2200336026e66ae6fda9a987f4edd33f5fa9f6c3bb522": {
     "describe": {
       "columns": [],
@@ -621,6 +675,24 @@
       }
     },
     "query": "UPDATE discord SET mid=? WHERE id=?"
+  },
+  "9ee612a4c45e5ee634e5d6677751783cbee9de3aa548ec7106f1c2c17a53a93a": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT id FROM wynn WHERE \n            mid NOT NULL AND NOT EXISTS (SELECT 1 FROM member WHERE oid=wynn.mid AND mcid=wynn.id)"
   },
   "9f57dbf82e156d45aeefe87574ccb77dcce99d1252f92f437d5f167f65462912": {
     "describe": {
@@ -673,6 +745,24 @@
       }
     },
     "query": "INSERT INTO member (discord,type,rank) VALUES (?,?,?)"
+  },
+  "ac8b2ab0c94042ee6e003d4f022d2127bb894031991d04369afd0c6da9912571": {
+    "describe": {
+      "columns": [
+        {
+          "name": "rowid",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT oid FROM member WHERE \n            (discord NOT NULL AND mcid NOT NULL AND type!='full') OR \n            (discord NOT NULL AND mcid IS NULL AND type!='discord') OR\n            (discord IS NULL AND mcid NOT NULL AND \n            NOT (SELECT guild FROM wynn WHERE id=member.mcid) AND type!='wynn') OR \n            (discord IS NULL AND mcid NOT NULL AND \n            (SELECT guild FROM wynn WHERE id=member.mcid) AND type!='guild')"
   },
   "aff2eb3d452c3c50dd45fba3541d8a2360191fb604e32e73dcec9eacc11a80ec": {
     "describe": {
@@ -785,6 +875,24 @@
       }
     },
     "query": "SELECT * FROM discord WHERE id=?"
+  },
+  "d405792658b5388c803ec8c4eea29ab422c4cb9664effe9e8cdcf49d4e10a516": {
+    "describe": {
+      "columns": [
+        {
+          "name": "id",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 0
+      }
+    },
+    "query": "SELECT id FROM guild WHERE\n            NOT EXISTS (SELECT 1 FROM wynn WHERE id=guild.id)"
   },
   "df6a04e8956601a9b4d2ef4c1a822bd6028069b06e9e0464553f6a58e46cc2dd": {
     "describe": {

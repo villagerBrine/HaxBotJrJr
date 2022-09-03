@@ -148,7 +148,7 @@ macro_rules! data {
         }
     };
     (INTERNAL; "db", $data:ident) => {
-        match $data.get::<memberdb::DBContainer>() {
+        match $data.get::<memberdb::DB>() {
             Some(v) => v.clone(),
             None => $crate::cmd_bail!("Failed to access member db"),
         }

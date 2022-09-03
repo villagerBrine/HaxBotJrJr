@@ -110,7 +110,7 @@ pub async fn add_discord_member_rank(
 
 /// Get the discord user from cache with given discord id
 pub fn to_user(cache: &Cache, id: DiscordId) -> Option<User> {
-    if let Ok(id) = u64::try_from(id).map(|id| UserId(id)) {
+    if let Ok(id) = u64::try_from(id.0).map(|id| UserId(id)) {
         return cache.user(id);
     }
     None
@@ -144,19 +144,19 @@ impl Ids {
     /// Fetch the profiles related to the id
     pub async fn to_profiles(&self, db: &DB) -> Profiles {
         let member = match self.member {
-            Some(mid) => ok_some!(crate::get_member(&mut db.exe(), mid).await),
+            Some(mid) => ok_some!(mid.get(&mut db.exe()).await),
             None => None,
         };
         let guild = match &self.mc {
-            Some(mcid) => ok_some!(crate::get_guild_profile(&mut db.exe(), mcid).await),
+            Some(mcid) => ok_some!(mcid.get_guild(&mut db.exe()).await),
             None => None,
         };
         let wynn = match &self.mc {
-            Some(mcid) => ok_some!(crate::get_wynn_profile(&mut db.exe(), mcid).await),
+            Some(mcid) => ok_some!(mcid.get_wynn(&mut db.exe()).await),
             None => None,
         };
         let discord = match self.discord {
-            Some(discord) => ok_some!(crate::get_discord_profile(&mut db.exe(), discord).await),
+            Some(discord) => ok_some!(discord.get(&mut db.exe()).await),
             None => None,
         };
         Profiles { member, guild, discord, wynn }
@@ -169,8 +169,8 @@ pub async fn get_wynn_guild_profiles(
 ) -> (Option<WynnProfile>, Option<GuildProfile>) {
     match mcid {
         Some(id) => {
-            let wynn = ok!(crate::get_wynn_profile(&mut db.exe(), &id).await, None);
-            let guild = ok!(crate::get_guild_profile(&mut db.exe(), &id).await, None);
+            let wynn = ok!(id.get_wynn(&mut db.exe()).await, None);
+            let guild = ok!(id.get_guild(&mut db.exe()).await, None);
             (wynn, guild)
         }
         None => (None, None),
@@ -179,10 +179,10 @@ pub async fn get_wynn_guild_profiles(
 
 /// Get profiles related to the member id
 pub async fn get_profiles_member(db: &DB, mid: MemberId) -> Profiles {
-    match crate::get_member(&mut db.exe(), mid).await {
+    match mid.get(&mut db.exe()).await {
         Ok(Some(member)) => {
             let discord = match member.discord {
-                Some(id) => ok!(crate::get_discord_profile(&mut db.exe(), id).await, None),
+                Some(id) => ok!(id.get(&mut db.exe()).await, None),
                 None => None,
             };
             let (wynn, guild) = get_wynn_guild_profiles(db, &member.mcid).await;
@@ -204,11 +204,11 @@ pub async fn get_profiles_member(db: &DB, mid: MemberId) -> Profiles {
 
 /// Get profiles related to the discord id
 pub async fn get_profiles_discord(db: &DB, discord_id: DiscordId) -> Profiles {
-    match crate::get_discord_profile(&mut db.exe(), discord_id).await {
+    match discord_id.get(&mut db.exe()).await {
         Ok(Some(discord)) => {
             // Checks if the discord is linked with a member
             if let Some(mid) = discord.mid {
-                if let Ok(Some(member)) = crate::get_member(&mut db.exe(), mid).await {
+                if let Ok(Some(member)) = mid.get(&mut db.exe()).await {
                     let (wynn, guild) = get_wynn_guild_profiles(db, &member.mcid).await;
                     return Profiles {
                         member: Some(member),
@@ -236,11 +236,11 @@ pub async fn get_profiles_discord(db: &DB, discord_id: DiscordId) -> Profiles {
 
 /// Get profiles related to the mcid
 pub async fn get_profiles_mc(db: &DB, mcid: &McId) -> Profiles {
-    let (wynn, guild) = get_wynn_guild_profiles(db, &Some(mcid.to_string())).await;
+    let (wynn, guild) = get_wynn_guild_profiles(db, &Some(mcid.clone())).await;
     let (member, discord) = match wynn {
-        Some(WynnProfile { mid: Some(mid), .. }) => match crate::get_member(&mut db.exe(), mid).await {
+        Some(WynnProfile { mid: Some(mid), .. }) => match mid.get(&mut db.exe()).await {
             Ok(Some(member)) => match member.discord {
-                Some(discord_id) => match crate::get_discord_profile(&mut db.exe(), discord_id).await {
+                Some(discord_id) => match discord_id.get(&mut db.exe()).await {
                     Ok(Some(discord)) => (Some(member), Some(discord)),
                     _ => (Some(member), None),
                 },
@@ -255,10 +255,10 @@ pub async fn get_profiles_mc(db: &DB, mcid: &McId) -> Profiles {
 
 /// Get all ids related to the member
 pub async fn get_ids_member(db: &DB, mid: MemberId) -> Ids {
-    match crate::member_exist(&mut db.exe(), mid).await.ok() {
+    match mid.exist(&mut db.exe()).await.ok() {
         Some(exist) => {
             if exist {
-                let (discord, mc) = ok!(crate::get_member_links(&mut db.exe(), mid).await, (None, None));
+                let (discord, mc) = ok!(mid.links(&mut db.exe()).await, (None, None));
                 Ids { member: Some(mid), discord, mc }
             } else {
                 Ids {
@@ -274,8 +274,8 @@ pub async fn get_ids_member(db: &DB, mid: MemberId) -> Ids {
 
 /// Checks if the discord user is a member
 pub async fn is_discord_member(db: &DB, id: &UserId) -> bool {
-    let discord_id = ok!(i64::try_from(id.0), "Failed to convert u64 to i64 (id)", return false);
-    match crate::get_discord_mid(&mut db.exe(), discord_id).await {
+    let discord_id = ok!(DiscordId::try_from(id.0), return false);
+    match discord_id.mid(&mut db.exe()).await {
         Ok(Some(_)) => true,
         _ => false,
     }
@@ -340,4 +340,93 @@ impl QueryAction for FilterSortWrap {
             Self::Sort(sort) => sort.apply_action(builder),
         }
     }
+}
+
+pub async fn check_integrity(db: &DB) -> Result<Vec<String>> {
+    let mut issues = Vec::new();
+
+    let rows = sqlx::query!(
+        "SELECT oid FROM member WHERE 
+            (discord NOT NULL AND mcid NOT NULL AND type!='full') OR 
+            (discord NOT NULL AND mcid IS NULL AND type!='discord') OR
+            (discord IS NULL AND mcid NOT NULL AND 
+            NOT (SELECT guild FROM wynn WHERE id=member.mcid) AND type!='wynn') OR 
+            (discord IS NULL AND mcid NOT NULL AND 
+            (SELECT guild FROM wynn WHERE id=member.mcid) AND type!='guild')"
+    )
+    .fetch_all(&db.pool)
+    .await?;
+    if !rows.is_empty() {
+        issues.push(format!("Wrong member type: {:?}", rows));
+    }
+
+    let rows = sqlx::query!("SELECT oid FROM member WHERE (discord IS NULL AND mcid IS NULL)")
+        .fetch_all(&db.pool)
+        .await?;
+    if !rows.is_empty() {
+        issues.push(format!("Empty member: {:?}", rows));
+    }
+
+    let rows = sqlx::query!(
+        "SELECT oid FROM member WHERE 
+            (discord NOT NULL AND NOT EXISTS (SELECT 1 FROM discord WHERE id=member.discord AND mid=member.oid)) OR 
+            (mcid NOT NULL AND NOT EXISTS (SELECT 1 FROM wynn WHERE id=member.mcid AND mid=member.oid))")
+        .fetch_all(&db.pool)
+        .await?;
+    if !rows.is_empty() {
+        issues.push(format!("Bad profile link: {:?}", rows));
+    }
+
+    let rows = sqlx::query!(
+        "SELECT id FROM discord WHERE
+            mid NOT NULL AND NOT EXISTS (SELECT 1 FROM member WHERE oid=discord.mid AND discord=discord.id)"
+    )
+    .fetch_all(&db.pool)
+    .await?;
+    if !rows.is_empty() {
+        issues.push(format!("Bad member link from discord: {:?}", rows));
+    }
+
+    let rows = sqlx::query!(
+        "SELECT id FROM wynn WHERE 
+            mid NOT NULL AND NOT EXISTS (SELECT 1 FROM member WHERE oid=wynn.mid AND mcid=wynn.id)"
+    )
+    .fetch_all(&db.pool)
+    .await?;
+    if !rows.is_empty() {
+        issues.push(format!("Bad member link from wynn: {:?}", rows));
+    }
+
+    let rows = sqlx::query!(
+        "SELECT id FROM wynn WHERE
+            guild AND NOT EXISTS (SELECT 1 FROM guild WHERE id=wynn.id)"
+    )
+    .fetch_all(&db.pool)
+    .await?;
+    if !rows.is_empty() {
+        issues.push(format!("Missing guild profile: {:?}", rows));
+    }
+
+    let rows = sqlx::query!(
+        "SELECT id FROM guild WHERE
+            NOT EXISTS (SELECT 1 FROM wynn WHERE id=guild.id)"
+    )
+    .fetch_all(&db.pool)
+    .await?;
+    if !rows.is_empty() {
+        issues.push(format!("Missing wynn profile: {:?}", rows));
+    }
+
+    let rows = sqlx::query!(
+        "SELECT id FROM wynn WHERE
+            guild AND EXISTS (SELECT 1 FROM guild WHERE id=wynn.id) 
+                AND NOT EXISTS (SELECT 1 FROM guild WHERE mid=wynn.mid)"
+    )
+    .fetch_all(&db.pool)
+    .await?;
+    if !rows.is_empty() {
+        issues.push(format!("Mismatched member link between wynn & guild: {:?}", rows));
+    }
+
+    Ok(issues)
 }

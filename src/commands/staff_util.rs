@@ -5,7 +5,9 @@ use serenity::framework::standard::{Args, CommandResult};
 use serenity::model::channel::Message;
 use tracing::error;
 
-use util::{ctx, ok, some};
+use memberdb::model::discord::DiscordId;
+use memberdb::model::wynn::McId;
+use util::{ctx, some};
 
 use crate::checks::STAFF_CHECK;
 use crate::{cmd_bail, data, finish};
@@ -34,14 +36,11 @@ async fn fix_nick(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         finish!(ctx, msg, "Can't find specified discord user")
     );
 
-    let discord_id = ok!(
-        i64::try_from(discord_member.as_ref().user.id.0),
-        cmd_bail!("Failed to convert user id to discord id")
-    );
+    let discord_id = DiscordId::try_from(discord_member.as_ref().user.id.0)?;
     let mid = {
         let db = db.read().await;
         some!(
-            ctx!(memberdb::get_discord_mid(&mut db.exe(), discord_id).await)?,
+            ctx!(discord_id.mid(&mut db.exe()).await)?,
             finish!(ctx, msg, "The provided discord user isn't a member")
         )
     };
@@ -81,18 +80,15 @@ async fn fix_role(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         finish!(ctx, msg, "Can't find specified discord user")
     );
 
-    let discord_id = ok!(
-        i64::try_from(discord_member.as_ref().user.id.0),
-        cmd_bail!("Failed to convert user id to discord id")
-    );
+    let discord_id = DiscordId::try_from(discord_member.as_ref().user.id.0)?;
 
     let rank = {
         let db = db.read().await;
         let mid = some!(
-            ctx!(memberdb::get_discord_mid(&mut db.exe(), discord_id).await)?,
+            ctx!(discord_id.mid(&mut db.exe()).await)?,
             finish!(ctx, msg, "The provided discord user isn't a member")
         );
-        ctx!(memberdb::get_member_rank(&mut db.exe(), mid).await)?
+        ctx!(mid.rank(&mut db.exe()).await)?
     };
 
     let mut discord_member = discord_member.into_owned();
@@ -127,11 +123,11 @@ async fn sync_member_ign(ctx: &Context, msg: &Message, arg: Args) -> CommandResu
     let old_ign = arg.rest();
     let mcid = {
         let db = db.read().await;
-        ctx!(memberdb::get_ign_mcid(&mut db.exe(), old_ign).await)?
+        ctx!(McId::from_ign(&mut db.exe(), old_ign).await)?
     };
     let mcid = some!(mcid, finish!(ctx, msg, "Unable to find the mc account in database"));
 
-    let ign = ctx!(wynn::get_ign(&client, &mcid).await)?;
+    let ign = ctx!(wynn::get_ign(&client, &mcid.0).await)?;
     if ign == old_ign {
         finish!(ctx, msg, "Ign unchanged");
     }
@@ -139,7 +135,7 @@ async fn sync_member_ign(ctx: &Context, msg: &Message, arg: Args) -> CommandResu
     {
         let db = db.write().await;
         let mut tx = ctx!(db.begin().await)?;
-        ctx!(memberdb::update_ign(&mut tx, &mcid, &ign).await)?;
+        ctx!(mcid.set_ign(&mut tx, &ign).await)?;
         ctx!(tx.commit().await)?;
     }
 

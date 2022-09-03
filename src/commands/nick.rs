@@ -5,6 +5,7 @@ use serenity::framework::standard::{Args, CommandResult};
 use serenity::model::channel::Message;
 use tracing::error;
 
+use memberdb::model::discord::DiscordId;
 use util::{ctx, some};
 
 use crate::{data, finish};
@@ -24,13 +25,10 @@ async fn set_custom_nick(ctx: &Context, msg: &Message, args: Args) -> CommandRes
     let db = data!(ctx, "db");
 
     let discord_member = ctx!(msg.member(&ctx).await, "Failed to get member who sent the message")?;
-    let discord_id = ctx!(i64::try_from(discord_member.user.id), "Failed to convert user id to discord id")?;
+    let discord_id = DiscordId::try_from(discord_member.user.id.0)?;
     let mid = {
         let db = db.read().await;
-        some!(
-            ctx!(memberdb::get_discord_mid(&mut db.exe(), discord_id).await)?,
-            finish!(ctx, msg, "You aren't a member")
-        )
+        some!(ctx!(discord_id.mid(&mut db.exe()).await)?, finish!(ctx, msg, "You aren't a member"))
     };
 
     let result =
