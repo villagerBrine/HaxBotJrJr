@@ -13,8 +13,9 @@ use tracing::{error, info, instrument};
 
 use config::Config;
 use event::timer::{TimerEvent, TimerSignal};
-use event::{DiscordContext, DiscordEvent, DiscordSignal, WynnEvent, WynnSignal};
+use event::{DiscordContext, DiscordEvent, DiscordSignal};
 use util::{ctx, ok, some};
+use wynn::events::{WynnEvent, WynnSignal};
 
 use crate::model::discord::DiscordId;
 use crate::model::guild::GuildRank;

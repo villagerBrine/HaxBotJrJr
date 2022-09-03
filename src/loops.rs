@@ -8,7 +8,7 @@ use tokio::sync::RwLock;
 use tracing::{info, instrument, warn};
 
 use config::Config;
-use event::{DiscordContext, DiscordEvent, DiscordSignal, WynnEvent, WynnSignal};
+use event::{DiscordContext, DiscordEvent, DiscordSignal};
 use memberdb::events::DBEvent;
 use memberdb::model::discord::DiscordId;
 use memberdb::model::member::{MemberId, MemberRank};
@@ -16,6 +16,7 @@ use memberdb::model::wynn::McId;
 use memberdb::DB;
 use util::discord;
 use util::{ctxw, ok, some};
+use wynn::events::{WynnEvent, WynnSignal};
 
 /// Start event listening loops
 pub async fn start_loops(

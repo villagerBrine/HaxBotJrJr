@@ -11,6 +11,7 @@ anyhow = "1.0"
 util = {path = "../util"}
 event = {path = "../event"}
 config = {path = "../config"}
+wynn = {path = "../wynn"}
 
 [dependencies.sqlx]
 version = "0.6"

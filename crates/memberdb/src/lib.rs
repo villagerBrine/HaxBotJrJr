@@ -8,9 +8,11 @@ pub mod query;
 pub mod utils;
 pub mod voice_tracker;
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use serenity::async_trait;
 use serenity::prelude::TypeMapKey;
 use sqlx::pool::PoolConnection;
 use sqlx::query::Map;
@@ -19,6 +21,8 @@ use sqlx::Error;
 use sqlx::{Pool, Sqlite};
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::RwLock;
+
+use wynn::loops::TrackedIgn;
 
 pub use crate::api::fetch::*;
 pub use crate::api::table;
@@ -138,4 +142,14 @@ async fn connect_db(file: &str, max_conn: u32) -> Pool<Sqlite> {
         .await
         .expect("Couldn't run database migrations");
     db
+}
+
+pub struct TrackedIgnGetter(pub Arc<RwLock<DB>>);
+
+#[async_trait]
+impl TrackedIgn for TrackedIgnGetter {
+    async fn tracked_ign(&self) -> Result<HashSet<String>> {
+        let db = self.0.read().await;
+        crate::table::list_igns(&db).await.map(|list| list.into_iter().collect())
+    }
 }

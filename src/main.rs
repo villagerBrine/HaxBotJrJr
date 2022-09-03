@@ -8,6 +8,8 @@ use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{fmt, Layer};
 
+use memberdb::TrackedIgnGetter;
+
 use haxbotjr::commands::*;
 use haxbotjr::data::BotData;
 
@@ -137,7 +139,13 @@ async fn main() {
     config::start_loop(data.config, data.discord_signal).await;
 
     let data = bot_data.clone();
-    wynn::loops::start_loops(data.wynn_signal, data.reqwest_client, data.wynn_cache, data.db).await;
+    wynn::loops::start_loops(
+        data.wynn_signal,
+        data.reqwest_client,
+        data.wynn_cache,
+        TrackedIgnGetter(data.db),
+    )
+    .await;
 
     let data = bot_data.clone();
     tokio::spawn(async move {

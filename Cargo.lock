@@ -873,6 +873,7 @@ dependencies = [
  "tokio",
  "tracing",
  "util",
+ "wynn",
 ]
 
 [[package]]
@@ -2301,7 +2302,6 @@ dependencies = [
  "anyhow",
  "backoff",
  "event",
- "memberdb",
  "reqwest",
  "serde",
  "serde_json",

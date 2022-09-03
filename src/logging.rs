@@ -11,11 +11,11 @@ use tracing::info;
 
 use config::tag::TextChannelTag;
 use config::Config;
-use event::{WynnEvent, WynnSignal};
 use memberdb::events::DBEvent;
 use memberdb::DB;
 use msgtool::table;
 use util::{ctx, ok, some};
+use wynn::events::{WynnEvent, WynnSignal};
 
 /// Make a log message from `WynnEvent`
 fn make_wynn_log(event: &WynnEvent) -> Option<String> {

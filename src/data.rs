@@ -10,9 +10,10 @@ use tokio::sync::{Mutex, RwLock};
 
 use config::Config;
 use event::timer::TimerSignal;
-use event::{DiscordSignal, WynnSignal};
+use event::DiscordSignal;
 use memberdb::DB;
 use wynn::cache::Cache;
+use wynn::events::WynnSignal;
 
 #[derive(Debug, Clone)]
 /// Container for all bot data, so they can all be cloned at once.

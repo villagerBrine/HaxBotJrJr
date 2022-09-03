@@ -12,7 +12,6 @@ tracing = "0.1.23"
 anyhow = "1.0"
 event = {path = "../event"}
 util = {path = "../util"}
-memberdb = {path = "../memberdb"}
 
 [dependencies.reqwest]
 version = "0.11"

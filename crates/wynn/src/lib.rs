@@ -2,6 +2,7 @@
 #[warn(missing_docs, missing_debug_implementations)]
 pub mod cache;
 pub mod error;
+pub mod events;
 pub mod loops;
 pub mod model;
 pub mod utils;

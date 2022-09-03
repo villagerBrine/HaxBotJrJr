@@ -3,15 +3,16 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration as StdDuration;
 
+use anyhow::Result;
 use reqwest::Client;
-use tokio::sync::RwLock;
+use serenity::async_trait;
 use tokio::time::{self, Duration};
 use tracing::{error, info};
 
-use event::{WynnEvent, WynnSignal};
-use memberdb::DB;
+use util::ok;
 
 use crate::cache::Cache;
+use crate::events::{WynnEvent, WynnSignal};
 use crate::model::{Guild, GuildMember, ServerList};
 
 /// Start loops for fetching and analyzing of wynncraft api and broadcasting [`WynnEvent`]
@@ -20,7 +21,9 @@ use crate::model::{Guild, GuildMember, ServerList};
 ///
 /// [`WynnEvent`]: event::WynnEvent
 /// [`Cache`]: crate::cache::Cache
-pub async fn start_loops(signal: WynnSignal, client: Client, cache: Arc<Cache>, db: Arc<RwLock<DB>>) {
+pub async fn start_loops(
+    signal: WynnSignal, client: Client, cache: Arc<Cache>, tracked_ign: impl TrackedIgn,
+) {
     let shared_signal = signal.clone();
     let shared_client = client.clone();
     let shared_cache = Arc::clone(&cache);
@@ -31,8 +34,15 @@ pub async fn start_loops(signal: WynnSignal, client: Client, cache: Arc<Cache>, 
     });
 
     tokio::spawn(async move {
-        server_api_loop(signal, &client, &db, &cache).await;
+        server_api_loop(signal, &client, tracked_ign, &cache).await;
     });
+}
+
+/// Trait for getting set of tracked igns.
+#[async_trait]
+pub trait TrackedIgn: Send + Sync + 'static {
+    /// Get set of tracked igns for online status tracking.
+    async fn tracked_ign(&self) -> Result<HashSet<String>>;
 }
 
 /// Starts a loop to analyze main guild statistics and broadcast [`WynnEvent`]
@@ -189,7 +199,7 @@ fn get_member_events(old: &GuildMember, new: &GuildMember) -> Vec<WynnEvent> {
 /// Starts a loop to analyze server online players and broadcast [`WynnEvent`]
 ///
 /// [`WynnEvent`]: event::WynnEvent
-async fn server_api_loop(signal: WynnSignal, client: &Client, db: &RwLock<DB>, cache: &Cache) {
+async fn server_api_loop(signal: WynnSignal, client: &Client, tracked_ign: impl TrackedIgn, cache: &Cache) {
     let mut interval = time::interval(Duration::from_secs(60));
     let mut prev_timestamp: u64 = 0;
     let mut first_loop = true;
@@ -242,16 +252,8 @@ async fn server_api_loop(signal: WynnSignal, client: &Client, db: &RwLock<DB>, c
 
         let mut events: Vec<WynnEvent> = Vec::new();
         // Getting all track-able igns from database
-        let mut all_igns: HashSet<String> = {
-            let db = db.read().await;
-            match memberdb::table::list_igns(&db).await {
-                Ok(list) => list.into_iter().collect(),
-                Err(why) => {
-                    error!("Failed to list tracked igns from db: {:#}", why);
-                    continue;
-                }
-            }
-        };
+        let mut all_igns: HashSet<String> =
+            ok!(tracked_ign.tracked_ign().await, "Failed to get tracked igns", continue);
 
         if first_loop {
             // initialize `tracked_ign`
