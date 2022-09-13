@@ -15,8 +15,10 @@ use config::Config;
 use event::timer::{TimerEvent, TimerSignal};
 use event::{DiscordContext, DiscordEvent, DiscordSignal};
 use util::{ctx, ok, some};
+use wynn::cache::Cache as WynnCache;
 use wynn::events::{WynnEvent, WynnSignal};
 
+use crate::events::DBEvent;
 use crate::model::discord::DiscordId;
 use crate::model::guild::GuildRank;
 use crate::model::wynn::McId;
@@ -24,9 +26,10 @@ use crate::voice_tracker::VoiceTracker;
 use crate::DB;
 
 /// Start database managing loops
+#[allow(clippy::too_many_arguments)]
 pub async fn start_loops(
-    db: Arc<RwLock<DB>>, config: Arc<RwLock<Config>>, cache: Arc<Cache>, vt: Arc<Mutex<VoiceTracker>>,
-    wynn_sig: WynnSignal, dc_sig: DiscordSignal, timer_sig: TimerSignal,
+    db: Arc<RwLock<DB>>, config: Arc<RwLock<Config>>, cache: Arc<Cache>, wynn_cache: Arc<WynnCache>,
+    vt: Arc<Mutex<VoiceTracker>>, wynn_sig: WynnSignal, dc_sig: DiscordSignal, timer_sig: TimerSignal,
 ) {
     let shared_db = db.clone();
     tokio::spawn(async move {
@@ -57,6 +60,19 @@ pub async fn start_loops(
             let event = recv.recv().await.unwrap();
             let (ctx, event) = event.as_ref();
             process_discord_event(&shared_db, &config, &shared_vt, event, ctx).await;
+        }
+    });
+
+    let shared_db = db.clone();
+    tokio::spawn(async move {
+        info!("Starting member manage loop (db event)");
+        let mut recv = {
+            let db = shared_db.read().await;
+            db.connect()
+        };
+        loop {
+            let event = recv.recv().await.unwrap();
+            process_db_event(&shared_db, &wynn_cache, &event).await;
         }
     });
 
@@ -379,6 +395,21 @@ async fn process_discord_event(
                     let _ = ctx!(tx.commit().await);
                 }
             }
+        }
+        _ => {}
+    }
+}
+
+#[allow(clippy::single_match)]
+async fn process_db_event(db: &RwLock<DB>, cache: &WynnCache, event: &DBEvent) {
+    match event {
+        DBEvent::WynnProfileUnbind { before, .. } => {
+            let ign = {
+                let db = db.read().await;
+                ok!(ctx!(before.ign(&mut db.exe()).await), return)
+            };
+            let mut onlines = cache.online.write().await;
+            onlines.remove(&ign);
         }
         _ => {}
     }

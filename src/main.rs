@@ -128,6 +128,7 @@ async fn main() {
         data.db,
         data.config,
         cache,
+        data.wynn_cache,
         data.voice_tracker,
         data.wynn_signal,
         data.discord_signal,
