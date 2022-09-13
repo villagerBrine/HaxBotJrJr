@@ -1,8 +1,8 @@
 //! Utilities for formatting string presentation of database profiles
+use memberdb::model::db::Profiles;
 use memberdb::model::discord::DiscordProfile;
 use memberdb::model::guild::GuildProfile;
 use memberdb::model::wynn::WynnProfile;
-use memberdb::utils::Profiles;
 use serenity::client::Cache;
 
 use util::some;
@@ -35,7 +35,9 @@ pub async fn get_names(cache: &Cache, profiles: &Profiles) -> (String, String) {
 
     // Get and format discord username
     let discord_name = match &profiles.discord {
-        Some(discord) => memberdb::utils::to_user(cache, discord.id)
+        Some(discord) => discord
+            .id
+            .to_user(cache)
             .map(|user| format!("{}#{}", user.name, user.discriminator)),
         None => None,
     };

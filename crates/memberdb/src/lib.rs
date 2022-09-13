@@ -1,10 +1,8 @@
-//! Module for managing and interacting with the member database
-//! You should only access the database via this module.
 pub mod api;
 pub mod events;
 pub mod loops;
 pub mod model;
-pub mod query;
+pub mod query_builder;
 pub mod utils;
 pub mod voice_tracker;
 
@@ -27,7 +25,9 @@ use wynn::loops::TrackedIgn;
 pub use crate::api::fetch::*;
 pub use crate::api::table;
 pub use crate::api::update::*;
+pub use crate::api::*;
 use crate::events::{DBEvent, DBSignal};
+use crate::model::wynn::McId;
 
 pub type Conn = PoolConnection<Sqlite>;
 
@@ -128,6 +128,14 @@ impl<'a> Executor<'a> {
     {
         query_call!(self, query, fetch_one)
     }
+
+    async fn all<'q, F, O>(&mut self, query: OptionalMap<'q, F>) -> Result<Vec<O>, Error>
+    where
+        F: FnMut(SqliteRow) -> Result<O, Error> + Send,
+        O: Send + Unpin,
+    {
+        query_call!(self, query, fetch_all)
+    }
 }
 
 /// Connect to the database
@@ -150,6 +158,6 @@ pub struct TrackedIgnGetter(pub Arc<RwLock<DB>>);
 impl TrackedIgn for TrackedIgnGetter {
     async fn tracked_ign(&self) -> Result<HashSet<String>> {
         let db = self.0.read().await;
-        crate::table::list_igns(&db).await.map(|list| list.into_iter().collect())
+        McId::igns(&mut db.exe()).await.map(|list| list.into_iter().collect())
     }
 }

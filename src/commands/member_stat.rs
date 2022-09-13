@@ -5,9 +5,9 @@ use serenity::framework::standard::macros::command;
 use serenity::framework::standard::{Args, CommandResult};
 use serenity::model::channel::Message;
 
+use memberdb::model::db::{Profiles, Stat};
 use memberdb::model::discord::DiscordId;
-use memberdb::query::{Filter, Sort, Stat};
-use memberdb::utils::{FilterSortWrap, SelectableWrap};
+use memberdb::query_builder::{Filter, QueryMod, Selectables, Sort};
 use msgtool::pager::Pager;
 use msgtool::table::{self, TableData};
 use util::{ctx, some};
@@ -47,9 +47,9 @@ async fn display_profile(ctx: &Context, msg: &Message, args: Args) -> CommandRes
         match target {
             TargetId::Discord(id) => {
                 let id = DiscordId::try_from(id.0)?;
-                memberdb::utils::get_profiles_discord(&db, id).await
+                Profiles::from_discord(&db, id).await
             }
-            TargetId::Wynn(id) => memberdb::utils::get_profiles_mc(&db, &id).await,
+            TargetId::Wynn(id) => Profiles::from_mc(&db, &id).await,
         }
     };
 
@@ -63,7 +63,7 @@ async fn display_profile(ctx: &Context, msg: &Message, args: Args) -> CommandRes
         e.author(|a| a.name(names.1)).title(names.0);
 
         if let Some(discord) = &profiles.discord {
-            if let Some(user) = memberdb::utils::to_user(&ctx.cache, discord.id) {
+            if let Some(user) = discord.id.to_user(&ctx.cache) {
                 if let Some(url) = user.avatar_url() {
                     e.thumbnail(url);
                 }
@@ -265,7 +265,7 @@ async fn display_member_info(ctx: &Context, msg: &Message, args: Args) -> Comman
         }
     }
     if let Some(id) = member.discord {
-        let user = some!(memberdb::utils::to_user(&ctx.cache, id), cmd_bail!("Failed to get discord user"));
+        let user = some!(id.to_user(&ctx.cache), cmd_bail!("Failed to get discord user"));
         content.push_str(&format!("\n**Discord** {}#{} `{}`", user.name, user.discriminator, id));
     }
 
@@ -337,7 +337,7 @@ async fn display_member_info(ctx: &Context, msg: &Message, args: Args) -> Comman
 /// Sorts are applied in the order they are specified in.
 /// Note that the column `name` is special and can't be sorted.
 async fn display_table(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
-    let columns = arg::any::<SelectableWrap>(&mut args);
+    let columns = arg::any::<Selectables>(&mut args);
     arg::consume_raw(&mut args, "|");
     let filters = arg::any::<Filter>(&mut args);
     arg::consume_raw(&mut args, "|");
@@ -348,8 +348,8 @@ async fn display_table(ctx: &Context, msg: &Message, mut args: Args) -> CommandR
         finish!(ctx, msg, "No columns specified");
     }
     let mut actions = Vec::with_capacity(filters.len() + sorts.len());
-    actions.append(&mut filters.into_iter().map(|f| FilterSortWrap::Filter(f)).collect());
-    actions.append(&mut sorts.into_iter().map(|s| FilterSortWrap::Sort(s)).collect());
+    actions.append(&mut filters.into_iter().map(|f| QueryMod::Filter(f)).collect());
+    actions.append(&mut sorts.into_iter().map(|s| QueryMod::Sort(s)).collect());
 
     let db = data!(ctx, "db");
 

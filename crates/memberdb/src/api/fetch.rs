@@ -55,7 +55,7 @@ impl MemberId {
             .one(query!("SELECT discord,mcid FROM member WHERE oid=?", self))
             .await
             .context("Failed to fetch from member table")?;
-        Ok((row.discord.map(|id| DiscordId(id)), row.mcid.map(|id| McId(id))))
+        Ok((row.discord.map(DiscordId), row.mcid.map(McId)))
     }
 
     /// Get member type
@@ -122,7 +122,7 @@ impl McId {
             .optional(query_as!(WynnProfileRow, "SELECT * FROM wynn WHERE id=?", self))
             .await
             .context("Failed to fetch from wynn table")?;
-        Ok(wynn.map(|row| WynnProfile::from_row(row)))
+        Ok(wynn.map(WynnProfile::from_row))
     }
 
     /// Get the entire guild profile
@@ -168,7 +168,7 @@ impl McId {
             .await
             .context("Failed to fetch wynn.mid from ign")?
             .mid
-            .map(|mid| MemberId(mid)))
+            .map(MemberId))
     }
 
     /// Get ign
@@ -225,5 +225,12 @@ impl McId {
             .await
             .context("Failed to get guild.xp")?
             .xp)
+    }
+
+    /// Get list of all tracked igns, aka igns that is linked with a member
+    pub async fn igns(exe: &mut Executor<'_>) -> Result<Vec<String>> {
+        exe.all(query!("SELECT ign FROM wynn WHERE mid NOT NULL").map(|r| r.ign))
+            .await
+            .context("Failed to get all tracked igns")
     }
 }

@@ -6,10 +6,9 @@ use serenity::client::Cache;
 use sqlx::sqlite::SqliteRow;
 use sqlx::Row;
 
+use crate::model::db::{Column, Stat};
 use crate::model::discord::DiscordId;
-use crate::query::{
-    Column, Filter, MemberName, QueryAction, QueryBuilder, SelectAction, Selectable, Sort, Stat,
-};
+use crate::query_builder::{Filter, MemberName, QueryAction, QueryBuilder, SelectAction, Selectable, Sort};
 use crate::DB;
 
 /// Return all members as list with optional filter applied.
@@ -31,28 +30,17 @@ pub async fn list_members(cache: &Cache, db: &DB, filters: &Vec<Filter>) -> Resu
     let query = sqlx::query(&query).map(|r: SqliteRow| {
         vec![
             // ign
-            Column::WIgn.get_formatted(&r, &cache),
+            Column::WIgn.format_val(&r, cache),
             // discord name
-            match r
-                .get::<Option<DiscordId>, &str>("discord")
-                .map(|id| crate::utils::to_user(cache, id))
-            {
+            match r.get::<Option<DiscordId>, &str>("discord").map(|id| id.to_user(cache)) {
                 Some(Some(u)) => format!("{}#{}", u.name, u.discriminator),
                 _ => String::new(),
             },
             // member rank
-            Column::MRank.get_formatted(&r, &cache),
+            Column::MRank.format_val(&r, cache),
         ]
     });
     Ok(query.fetch_all(&db.pool).await?)
-}
-
-/// Get list of all ign that is associated with a member.
-pub async fn list_igns(db: &DB) -> Result<Vec<String>> {
-    Ok(sqlx::query!("SELECT ign FROM wynn WHERE mid NOT NULL")
-        .map(|r| r.ign)
-        .fetch_all(&db.pool)
-        .await?)
 }
 
 /// Return a stat leaderboard and its heading.
@@ -81,20 +69,20 @@ pub async fn stat_leaderboard(
     // Only filter out entries with stat value of 0 if there isn't a filter that is specifically
     // looking for stat value of 0.
     if !has_zero_filter {
-        query.filter(stat_col.get_ident().to_string());
+        query.filter(stat_col.query_ident().to_string());
     }
     query.with(&stat_col.profile().unwrap());
 
     let query = query.build_lb("r");
 
     let query = sqlx::query(&query).map(|r: SqliteRow| {
-        let name = MemberName.get_formatted(&r, &cache);
+        let name = MemberName.format_val(&r, cache);
         let lb_rank = r.get::<i64, _>("r");
-        let stat_val = stat_col.get_formatted(&r, &cache);
+        let stat_val = stat_col.format_val(&r, cache);
         vec![lb_rank.to_string(), name, stat_val]
     });
     let result = query.fetch_all(&db.pool).await?;
-    let header = vec![String::from("#"), String::from("name"), stat_col.get_table_name().to_string()];
+    let header = vec![String::from("#"), String::from("name"), stat_col.table_name().to_string()];
 
     Ok((result, header))
 }
@@ -119,7 +107,7 @@ pub async fn make_table(
         let mut row = Vec::with_capacity(cols.len() + 1);
         row.push(rank.to_string());
         for col in cols {
-            row.push(col.get_formatted(&r, &cache));
+            row.push(col.format_val(&r, cache));
         }
         row
     });
@@ -128,7 +116,7 @@ pub async fn make_table(
     let mut header = Vec::with_capacity(cols.len() + 1);
     header.push(String::from("#"));
     for col in cols {
-        header.push(col.get_table_name().to_string());
+        header.push(col.table_name().to_string());
     }
 
     Ok((result, header))

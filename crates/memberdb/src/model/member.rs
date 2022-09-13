@@ -221,27 +221,6 @@ impl FromStr for MemberType {
     }
 }
 
-#[derive(Debug)]
-/// Types of profiles
-pub enum ProfileType {
-    Discord,
-    Wynn,
-    Guild,
-}
-
-impl FromStr for ProfileType {
-    type Err = std::io::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "discord" => Ok(Self::Discord),
-            "wynn" => Ok(Self::Wynn),
-            "guild" => Ok(Self::Guild),
-            _ => ioerr!("Failed to parse '{}' as ProfileType", s),
-        }
-    }
-}
-
 #[derive(Debug, sqlx::FromRow)]
 /// Member table model with database primitives.
 /// Use this to query entire member from database, and convert it to `Member` with more

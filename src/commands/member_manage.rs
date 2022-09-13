@@ -6,7 +6,8 @@ use tokio::sync::RwLock;
 
 use memberdb::events::DBEvent;
 use memberdb::model::discord::DiscordId;
-use memberdb::model::member::{MemberId, MemberRank, MemberType, ProfileType};
+use memberdb::model::member::{MemberId, MemberRank, MemberType};
+use memberdb::model::db::ProfileType;
 use memberdb::model::wynn::McId;
 use memberdb::DB;
 use util::{ctx, ok, some};

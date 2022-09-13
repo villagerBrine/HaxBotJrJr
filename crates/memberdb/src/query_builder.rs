@@ -4,115 +4,32 @@ use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::str::FromStr;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use serenity::client::Cache;
 use sqlx::sqlite::SqliteRow;
 use sqlx::Row;
 
 use util::ioerr;
 
+use crate::model::db::{Column, ProfileType, Stat};
 use crate::model::discord::DiscordId;
 use crate::model::guild::{GuildRank, GUILD_RANKS};
-use crate::model::member::{MemberRank, MemberType, ProfileType, MEMBER_RANKS};
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-/// Represent database columns that can be selected.
-pub enum Column {
-    // Discord
-    DMessage,
-    DWeeklyMessage,
-    DVoice,
-    DWeeklyVoice,
-    // Wynn
-    WGuild,
-    WIgn,
-    WOnline,
-    WWeeklyOnline,
-    // Guild
-    GRank,
-    GXp,
-    GWeeklyXp,
-    // Member
-    MId,
-    MMcid,
-    MDiscord,
-    MRank,
-    MType,
-}
-
-impl Column {
-    /// Return which profile table a column belongs to, None if it is part of the member table
-    pub fn profile(&self) -> Option<ProfileType> {
-        match self {
-            Self::MId | Self::MRank | Self::MType | Self::MMcid | Self::MDiscord => None,
-            Self::GRank | Self::GXp | Self::GWeeklyXp => Some(ProfileType::Guild),
-            Self::WGuild | Self::WIgn | Self::WOnline | Self::WWeeklyOnline => Some(ProfileType::Wynn),
-            _ => Some(ProfileType::Discord),
-        }
-    }
-
-    /// Get the column name within the database
-    pub fn name(&self) -> &str {
-        match self {
-            Self::MDiscord => "discord",
-            Self::MMcid => "mcid",
-            Self::MId => "oid",
-            Self::DMessage => "message",
-            Self::DWeeklyMessage => "message_week",
-            Self::DVoice => "voice",
-            Self::DWeeklyVoice => "voice_week",
-            Self::WGuild => "guild",
-            Self::WIgn => "ign",
-            Self::WOnline => "activity",
-            Self::WWeeklyOnline => "activity_week",
-            Self::GRank | Self::MRank => "rank",
-            Self::GXp => "xp",
-            Self::GWeeklyXp => "xp_week",
-            Self::MType => "type",
-        }
-    }
-}
-
-impl FromStr for Column {
-    type Err = std::io::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "discord_id" => Self::MDiscord,
-            "message" => Self::DMessage,
-            "weekly_message" => Self::DWeeklyMessage,
-            "voice" => Self::DVoice,
-            "weekly_voice" => Self::DWeeklyVoice,
-            "mc_id" => Self::MMcid,
-            "in_guild" => Self::WGuild,
-            "ign" => Self::WIgn,
-            "online" => Self::WOnline,
-            "weekly_online" => Self::WWeeklyOnline,
-            "guild_rank" => Self::GRank,
-            "xp" => Self::GXp,
-            "weekly_xp" => Self::GWeeklyXp,
-            "id" => Self::MId,
-            "rank" => Self::MRank,
-            "type" => Self::MType,
-            _ => return ioerr!("Failed to parse '{}' as Column", s),
-        })
-    }
-}
+use crate::model::member::{MemberRank, MemberType, MEMBER_RANKS};
 
 impl QueryAction for Column {
     /// Selects the column
     fn apply_action<'a>(&self, builder: &'a mut QueryBuilder) -> &'a mut QueryBuilder {
         // "`select` AS `identifier`"
-        let mut select = self.get_select();
+        let mut select = self.select_query();
         select.push_str(" AS ");
-        select.push_str(self.get_ident());
+        select.push_str(self.query_ident());
         builder.select(select)
     }
 }
 
 impl Selectable for Column {
-    fn get_formatted(&self, row: &SqliteRow, _: &Cache) -> String {
-        let ident = self.get_ident();
+    fn format_val(&self, row: &SqliteRow, _: &Cache) -> String {
+        let ident = self.query_ident();
         match self {
             // Columns of type String
             Self::MType => row.get(ident),
@@ -120,7 +37,7 @@ impl Selectable for Column {
             Self::MId => row.get::<i64, _>(ident).to_string(),
             // Columns of type Option<String>
             Self::MDiscord | Self::WIgn | Self::MMcid | Self::GRank => {
-                row.get::<Option<String>, _>(ident).unwrap_or(String::new())
+                row.get::<Option<String>, _>(ident).unwrap_or_default()
             }
             // Columns of type Option<Number>
             Self::DMessage | Self::DWeeklyMessage | Self::GXp | Self::GWeeklyXp => {
@@ -152,23 +69,23 @@ impl Selectable for Column {
         }
     }
 
-    fn get_table_name(&self) -> &str {
+    fn table_name(&self) -> &str {
         match self {
             Self::MId => "member_id",
-            _ => self.get_ident(),
+            _ => self.query_ident(),
         }
     }
 }
 
 impl SelectAction for Column {
-    fn get_ident(&self) -> &str {
+    fn query_ident(&self) -> &str {
         match self {
             Self::GRank => "guild_rank",
             _ => self.name(),
         }
     }
 
-    fn get_select(&self) -> String {
+    fn select_query(&self) -> String {
         match self.profile() {
             // If it is from another table
             Some(profile) => {
@@ -178,7 +95,7 @@ impl SelectAction for Column {
         }
     }
 
-    fn get_sort_order(&self) -> Option<&str> {
+    fn sort_order(&self) -> Option<&str> {
         Some(match self {
             Self::GRank => {
                 "WHEN 'Recruit' THEN 0 
@@ -233,78 +150,6 @@ impl QueryAction for ProfileType {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
-/// All tracked stat columns
-pub enum Stat {
-    Message,
-    WeeklyMessage,
-    Voice,
-    WeeklyVoice,
-    Online,
-    WeeklyOnline,
-    Xp,
-    WeeklyXp,
-}
-
-impl Stat {
-    /// Convert from `Column`
-    pub fn from_column(col: &Column) -> Option<Self> {
-        Some(match col {
-            Column::DMessage => Self::Message,
-            Column::DWeeklyMessage => Self::WeeklyMessage,
-            Column::DVoice => Self::Voice,
-            Column::DWeeklyVoice => Self::WeeklyVoice,
-            Column::WOnline => Self::Online,
-            Column::WWeeklyOnline => Self::WeeklyOnline,
-            Column::GXp => Self::Xp,
-            Column::GWeeklyXp => Self::WeeklyXp,
-            _ => return None,
-        })
-    }
-
-    /// Convert to `Column`
-    pub fn to_column(&self) -> Column {
-        match self {
-            Self::Message => Column::DMessage,
-            Self::WeeklyMessage => Column::DWeeklyMessage,
-            Self::Voice => Column::DVoice,
-            Self::WeeklyVoice => Column::DWeeklyVoice,
-            Self::Online => Column::WOnline,
-            Self::WeeklyOnline => Column::WWeeklyOnline,
-            Self::Xp => Column::GXp,
-            Self::WeeklyXp => Column::GWeeklyXp,
-        }
-    }
-
-    /// Parse string into stat value based on stat type
-    pub fn parse_val(&self, val: &str) -> Result<u64> {
-        match self {
-            // parse as time duration
-            Self::Voice | Self::WeeklyVoice | Self::Online | Self::WeeklyOnline => {
-                util::string::parse_second(val)
-            }
-            // parse as number
-            _ => match u64::try_from(util::string::parse_num(val)?) {
-                Ok(n) => Ok(n),
-                Err(_) => bail!("Number can't be negative"),
-            },
-        }
-    }
-}
-
-impl FromStr for Stat {
-    type Err = std::io::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Ok(col) = Column::from_str(s) {
-            if let Some(stat) = Self::from_column(&col) {
-                return Ok(stat);
-            }
-        }
-        ioerr!("Failed to parse '{}' as Stat", s)
-    }
-}
-
 impl QueryAction for Stat {
     /// Selects the stat column
     fn apply_action<'a>(&self, builder: &'a mut QueryBuilder) -> &'a mut QueryBuilder {
@@ -313,11 +158,11 @@ impl QueryAction for Stat {
 }
 
 impl Selectable for Stat {
-    fn get_formatted(&self, row: &SqliteRow, cache: &Cache) -> String {
-        self.to_column().get_formatted(row, cache)
+    fn format_val(&self, row: &SqliteRow, cache: &Cache) -> String {
+        self.to_column().format_val(row, cache)
     }
 
-    fn get_table_name(&self) -> &str {
+    fn table_name(&self) -> &str {
         match self {
             Self::Message => "message",
             Self::WeeklyMessage => "weekly_message",
@@ -357,7 +202,7 @@ impl QueryAction for Filter {
     fn apply_action<'a>(&self, builder: &'a mut QueryBuilder) -> &'a mut QueryBuilder {
         match self {
             Self::Partial => builder.filter("type!='full'".to_string()),
-            Self::InGuild => builder.with(&Column::WGuild).filter(Column::WGuild.get_ident().to_string()),
+            Self::InGuild => builder.with(&Column::WGuild).filter(Column::WGuild.query_ident().to_string()),
             Self::HasMc => builder.filter("mcid NOT NULL".to_string()),
             Self::HasDiscord => builder.filter("discord NOT NULL".to_string()),
             Self::MemberType(ty) => builder.filter(format!("type='{}'", ty)),
@@ -383,7 +228,7 @@ impl QueryAction for Filter {
                 let valid_ranks = valid_ranks.join(",");
                 builder.with(&Column::GRank).filter(format!(
                     "{} IN ({})",
-                    Column::GRank.get_ident(),
+                    Column::GRank.query_ident(),
                     valid_ranks
                 ))
             }
@@ -394,7 +239,7 @@ impl QueryAction for Filter {
                     Ordering::Greater => ">=",
                 };
                 let col = stat.to_column();
-                builder.with(&col).filter(format!("{}{}{}", col.get_ident(), cmp, val))
+                builder.with(&col).filter(format!("{}{}{}", col.query_ident(), cmp, val))
             }
         }
     }
@@ -450,7 +295,7 @@ impl FromStr for Filter {
                 }
             }
         }
-        return ioerr!("Failed to parse '{}' as Filter", s);
+        ioerr!("Failed to parse '{}' as Filter", s)
     }
 }
 
@@ -469,11 +314,11 @@ impl QueryAction for Sort {
             Self::Desc(sa) => (sa, "DESC"),
         };
 
-        match sa.get_sort_order() {
+        match sa.sort_order() {
             Some(case) => {
-                builder.order(format!("CASE {} {} END {} NULLS LAST", sa.get_select(), case, order))
+                builder.order(format!("CASE {} {} END {} NULLS LAST", sa.select_query(), case, order))
             }
-            None => builder.order(format!("{} {} NULLS LAST", sa.get_select(), order)),
+            None => builder.order(format!("{} {} NULLS LAST", sa.select_query(), order)),
         }
     }
 }
@@ -486,18 +331,32 @@ impl FromStr for Sort {
     /// "^column" - order column in ascend order
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if !s.is_empty() {
-            if s.starts_with('^') {
-                if let Ok(col) = Column::from_str(&s[1..]) {
+            if let Some(stripped) = s.strip_prefix('^') {
+                if let Ok(col) = Column::from_str(stripped) {
                     return Ok(Self::Asc(col));
                 }
-            } else {
-                if let Ok(col) = Column::from_str(s) {
-                    return Ok(Self::Desc(col));
-                }
+            } else if let Ok(col) = Column::from_str(s) {
+                return Ok(Self::Desc(col));
             }
         }
 
         ioerr!("Failed to parse '{}' as Sort", s)
+    }
+}
+
+#[derive(Debug)]
+/// Wrapper over `Filter` and `Sort`
+pub enum QueryMod {
+    Filter(Filter),
+    Sort(Sort),
+}
+
+impl QueryAction for QueryMod {
+    fn apply_action<'a>(&self, builder: &'a mut QueryBuilder) -> &'a mut QueryBuilder {
+        match self {
+            Self::Filter(filter) => filter.apply_action(builder),
+            Self::Sort(sort) => sort.apply_action(builder),
+        }
     }
 }
 
@@ -515,20 +374,17 @@ impl QueryAction for MemberName {
 
 impl Selectable for MemberName {
     /// Get the name of the member
-    fn get_formatted(&self, row: &SqliteRow, cache: &Cache) -> String {
-        match row.get(Column::WIgn.get_ident()) {
+    fn format_val(&self, row: &SqliteRow, cache: &Cache) -> String {
+        match row.get(Column::WIgn.query_ident()) {
             Some(ign) => ign,
-            None => match row
-                .get::<Option<DiscordId>, &str>("discord")
-                .map(|id| crate::utils::to_user(cache, id))
-            {
+            None => match row.get::<Option<DiscordId>, &str>("discord").map(|id| id.to_user(cache)) {
                 Some(Some(u)) => format!("{}#{}", u.name, u.discriminator),
                 _ => String::new(),
             },
         }
     }
 
-    fn get_table_name(&self) -> &str {
+    fn table_name(&self) -> &str {
         "name"
     }
 }
@@ -538,7 +394,7 @@ impl FromStr for MemberName {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         if s == "name" {
-            return Ok(MemberName);
+            Ok(MemberName)
         } else {
             ioerr!("Failed to parse '{}' as MemberName", s)
         }
@@ -554,19 +410,65 @@ pub trait QueryAction {
 /// Trait for extracting value from `SqliteRow`, helps with table display
 pub trait Selectable: QueryAction + Sync {
     /// Extract value from `SqliteRow` as formatted string
-    fn get_formatted(&self, _: &SqliteRow, _: &Cache) -> String;
+    fn format_val(&self, _: &SqliteRow, _: &Cache) -> String;
     /// Get the column name to be displayed in a table
-    fn get_table_name(&self) -> &str;
+    fn table_name(&self) -> &str;
+}
+
+#[derive(Debug)]
+/// Wrapper over objects that implements `Selectable`
+pub enum Selectables {
+    Column(Column),
+    MemberName(MemberName),
+}
+
+impl FromStr for Selectables {
+    type Err = std::io::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(col) = Column::from_str(s) {
+            return Ok(Self::Column(col));
+        }
+        if let Ok(name) = MemberName::from_str(s) {
+            return Ok(Self::MemberName(name));
+        }
+        ioerr!("Failed to parse '{}' as Selectables", s)
+    }
+}
+
+impl QueryAction for Selectables {
+    fn apply_action<'a>(&self, builder: &'a mut QueryBuilder) -> &'a mut QueryBuilder {
+        match self {
+            Self::Column(col) => col.apply_action(builder),
+            Self::MemberName(name) => name.apply_action(builder),
+        }
+    }
+}
+
+impl Selectable for Selectables {
+    fn format_val(&self, row: &SqliteRow, cache: &Cache) -> String {
+        match self {
+            Self::Column(col) => col.format_val(row, cache),
+            Self::MemberName(name) => name.format_val(row, cache),
+        }
+    }
+
+    fn table_name(&self) -> &str {
+        match self {
+            Self::Column(col) => col.table_name(),
+            Self::MemberName(name) => name.table_name(),
+        }
+    }
 }
 
 /// `QueryAction` that performs a column select
 pub trait SelectAction: Selectable {
     /// Get the identifier of the selected value
-    fn get_ident(&self) -> &str;
+    fn query_ident(&self) -> &str;
     /// Get the select statement (without the identifier)
-    fn get_select(&self) -> String;
+    fn select_query(&self) -> String;
     /// Get the selected value's custom sort order, if it needs one
-    fn get_sort_order(&self) -> Option<&str> {
+    fn sort_order(&self) -> Option<&str> {
         None
     }
 }
@@ -667,5 +569,11 @@ impl QueryBuilder {
         }
 
         query
+    }
+}
+
+impl Default for QueryBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }

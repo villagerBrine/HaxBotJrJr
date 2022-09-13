@@ -37,7 +37,7 @@ pub async fn start_loops(
             let mut events_to_send = Vec::new();
 
             for event in events.as_ref() {
-                if let Some(ref mut events) = process_wynn_event(&shared_db, &event).await {
+                if let Some(ref mut events) = process_wynn_event(&shared_db, event).await {
                     events_to_send.append(events);
                 }
             }
@@ -320,7 +320,7 @@ async fn process_discord_event(
                     some!(vt.untrack_voice(&old_state.user_id.0), return)
                 };
 
-                track_voice_db(&db, old_state.user_id.0, dur).await;
+                track_voice_db(db, old_state.user_id.0, dur).await;
             }
         }
         DiscordEvent::VoiceChange { old_state, new_state } => {

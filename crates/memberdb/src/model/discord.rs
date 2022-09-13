@@ -3,6 +3,9 @@ use std::fmt;
 use std::io;
 
 use anyhow::Result;
+use serenity::client::Cache;
+use serenity::model::id::UserId;
+use serenity::model::user::User;
 
 use util::ioerr;
 
@@ -11,6 +14,15 @@ use crate::model::member::MemberId;
 #[derive(sqlx::Type, Debug, Clone, Copy, PartialEq, Eq)]
 #[sqlx(transparent)]
 pub struct DiscordId(pub i64);
+
+impl DiscordId {
+    pub fn to_user(&self, cache: &Cache) -> Option<User> {
+        if let Ok(id) = u64::try_from(self.0).map(UserId) {
+            return cache.user(id);
+        }
+        None
+    }
+}
 
 impl fmt::Display for DiscordId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

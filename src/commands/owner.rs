@@ -42,7 +42,7 @@ async fn check_db_integrity(ctx: &Context, msg: &Message, _: Args) -> CommandRes
 
     {
         let db = db.read().await;
-        let issues = memberdb::utils::check_integrity(&db).await?;
+        let issues = memberdb::check_integrity(&db).await?;
         if !issues.is_empty() {
             send!(ctx, msg, issues.join("\n"));
         }

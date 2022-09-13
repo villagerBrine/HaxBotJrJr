@@ -32,7 +32,7 @@ use crate::model::discord::DiscordId;
 use crate::model::guild::GuildRank;
 use crate::model::member::{MemberId, MemberRank, MemberType};
 use crate::model::wynn::McId;
-use crate::query::Stat;
+use crate::model::db::Stat;
 use crate::{Transaction, DB};
 
 impl MemberId {
