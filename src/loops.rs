@@ -51,7 +51,7 @@ pub async fn start_loops(
         loop {
             let events = recv.recv().await.unwrap();
             for event in events.as_ref() {
-                process_wynn_event(&shared_cache_http, &shared_db, &shared_config, &guild, &event).await;
+                process_wynn_event(&shared_cache_http, &shared_db, &shared_config, &guild, event).await;
             }
         }
     });
@@ -62,7 +62,7 @@ pub async fn start_loops(
         loop {
             let event = recv.recv().await.unwrap();
             let (ctx, event) = event.as_ref();
-            process_discord_event(&cache_http, &db, &config, &event, &ctx).await;
+            process_discord_event(&cache_http, &db, &config, event, ctx).await;
         }
     });
 }
@@ -75,35 +75,37 @@ async fn process_db_event(
         DBEvent::MemberAdd {
             discord_id: Some(discord_id), rank, mid, ..
         } => {
-            let mut member = some!(get_discord_member(&cache_http, &guild, *discord_id).await, return);
-            add_init_role_nick(&cache_http.http, &db, &config, *mid, *rank, &guild, &mut member).await;
+            let mut member = some!(get_discord_member(cache_http, guild, *discord_id).await, return);
+            add_init_role_nick(&cache_http.http, db, config, *mid, *rank, guild, &mut member).await;
         }
         DBEvent::MemberRemove { discord_id: Some(discord_id), .. }
         | DBEvent::DiscordProfileUnbind { before: discord_id, removed: false, .. } => {
-            let mut member = some!(get_discord_member(&cache_http, &guild, *discord_id).await, return);
-            remove_all_role_nick(&cache_http.http, &config, &guild, &mut member).await;
+            let mut member = some!(get_discord_member(cache_http, guild, *discord_id).await, return);
+            remove_all_role_nick(&cache_http.http, config, guild, &mut member).await;
         }
         DBEvent::MemberRankChange { mid, new: rank, .. } => {
-            let mut member = some!(get_discord_member_db(&cache_http, &db, *mid, &guild).await, return);
+            let mut member = some!(get_discord_member_db(cache_http, db, *mid, guild).await, return);
 
-            if {
+            let update_role = {
                 let config = config.read().await;
                 config.should_update_role(&member)
-            } {
+            };
+            if update_role {
                 info!("Updating discord roles");
                 let _ = ctxw!(
-                    crate::util::discord::fix_discord_roles(&cache_http.http, *rank, &guild, &mut member)
+                    crate::util::discord::fix_discord_roles(&cache_http.http, *rank, guild, &mut member)
                         .await
                 );
             }
 
-            if {
+            let update_nick = {
                 let config = config.read().await;
                 config.should_update_nick(&member)
-            } {
+            };
+            if update_nick {
                 info!("Updating discord nickname");
                 if let Err(why) =
-                    crate::util::discord::fix_member_nick(&cache_http.http, &db, *mid, &member, None).await
+                    crate::util::discord::fix_member_nick(&cache_http.http, db, *mid, &member, None).await
                 {
                     warn!("Failed to update discord member's nickname: {:#}", why);
                 }
@@ -112,7 +114,7 @@ async fn process_db_event(
         DBEvent::WynnProfileBind { mid, .. } | DBEvent::WynnProfileUnbind { mid, removed: false, .. } => {
             // Because discord nickname prioritize ign, so when a member's wynn profile is
             // binded / unbinded, their discord nickname need to be updated.
-            let member = some!(get_discord_member_db(&cache_http, &db, *mid, &guild).await, return);
+            let member = some!(get_discord_member_db(cache_http, db, *mid, guild).await, return);
 
             {
                 let config = config.read().await;
@@ -123,7 +125,7 @@ async fn process_db_event(
 
             info!("Updating discord nickname");
             if let Err(why) =
-                crate::util::discord::fix_member_nick(&cache_http.http, &db, *mid, &member, None).await
+                crate::util::discord::fix_member_nick(&cache_http.http, db, *mid, &member, None).await
             {
                 warn!("Failed to update discord member's nickname: {:#}", why);
             }
@@ -131,23 +133,24 @@ async fn process_db_event(
         DBEvent::DiscordProfileBind { mid, old, new } => {
             // Remove roles & nick from the old discord user
             if let Some(old_discord) = old {
-                if let Some(mut old_member) = get_discord_member(&cache_http, &guild, *old_discord).await {
-                    remove_all_role_nick(&cache_http.http, &config, &guild, &mut old_member).await;
+                if let Some(mut old_member) = get_discord_member(cache_http, guild, *old_discord).await {
+                    remove_all_role_nick(&cache_http.http, config, guild, &mut old_member).await;
                 }
             }
 
             // Add roles & nick to the new discord user
-            let mut member = some!(get_discord_member(&cache_http, &guild, *new).await, return);
+            let mut member = some!(get_discord_member(cache_http, guild, *new).await, return);
             let rank = {
                 let db = db.read().await;
                 ok!(mid.rank(&mut db.exe()).await, return)
             };
-            add_init_role_nick(&cache_http.http, &db, &config, *mid, rank, &guild, &mut member).await;
+            add_init_role_nick(&cache_http.http, db, config, *mid, rank, guild, &mut member).await;
         }
         _ => {}
     }
 }
 
+#[allow(clippy::single_match)]
 #[instrument(skip(cache_http, guild, db))]
 pub async fn process_wynn_event(
     cache_http: &CacheAndHttp, db: &RwLock<DB>, config: &RwLock<Config>, guild: &Guild, event: &WynnEvent,
@@ -156,7 +159,7 @@ pub async fn process_wynn_event(
         WynnEvent::MemberNameChange { id, new_name, .. } => {
             let mcid = McId(id.clone());
             // Update discord nick due to ign change.
-            let (member, mid) = some!(get_discord_member_mc(&cache_http, &db, &mcid, &guild).await, return);
+            let (member, mid) = some!(get_discord_member_mc(cache_http, db, &mcid, guild).await, return);
 
             {
                 let config = config.read().await;
@@ -194,7 +197,7 @@ pub async fn process_discord_event(
             if old.user.name != new.user.name {
                 {
                     let config = config.read().await;
-                    if !config.should_update_nick(&new) {
+                    if !config.should_update_nick(new) {
                         return;
                     }
                 }
@@ -211,7 +214,7 @@ pub async fn process_discord_event(
                 };
                 if !has_wynn {
                     if let Err(why) =
-                        crate::util::discord::fix_member_nick(&cache_http.http, &db, mid, new, None).await
+                        crate::util::discord::fix_member_nick(&cache_http.http, db, mid, new, None).await
                     {
                         warn!("Failed to update discord member's nickname: {:#}", why);
                     }
@@ -246,10 +249,9 @@ pub async fn get_discord_member_mc(
         ok!(mid.links(&mut db.exe()).await, return None).0
     };
     if let Some(discord_id) = discord_id {
-        return match get_discord_member(&cache_http, &guild, discord_id).await {
-            Some(member) => Some((member, mid)),
-            None => None,
-        };
+        return get_discord_member(cache_http, guild, discord_id)
+            .await
+            .map(|member| (member, mid));
     }
     None
 }
@@ -263,7 +265,7 @@ pub async fn get_discord_member_db(
         ok!(mid.links(&mut db.exe()).await, return None).0
     };
     if let Some(discord_id) = discord_id {
-        return get_discord_member(&cache_http, &guild, discord_id).await;
+        return get_discord_member(cache_http, guild, discord_id).await;
     }
     None
 }
@@ -280,20 +282,22 @@ pub async fn add_init_role_nick(
     http: &Http, db: &RwLock<DB>, config: &RwLock<Config>, mid: MemberId, rank: MemberRank, guild: &Guild,
     member: &mut Member,
 ) {
-    if {
+    let update_role = {
         let config = config.read().await;
-        config.should_update_nick(&member)
-    } {
+        config.should_update_role(member)
+    };
+    if update_role {
         info!("Updating discord roles");
-        let _ = ctxw!(crate::util::discord::fix_discord_roles(&http, rank, &guild, member).await);
+        let _ = ctxw!(crate::util::discord::fix_discord_roles(http, rank, guild, member).await);
     }
 
-    if {
+    let update_nick = {
         let config = config.read().await;
-        config.should_update_role(&member)
-    } {
+        config.should_update_nick(member)
+    };
+    if update_nick {
         info!("Updating discord nickname");
-        if let Err(why) = crate::util::discord::fix_member_nick(&http, &db, mid, member, Some("")).await {
+        if let Err(why) = crate::util::discord::fix_member_nick(http, db, mid, member, Some("")).await {
             warn!("Failed to set discord member's initial nickname: {:#}", why);
         }
     }
@@ -301,21 +305,23 @@ pub async fn add_init_role_nick(
 
 /// Remove a discord user's nick and all rank roles.
 pub async fn remove_all_role_nick(http: &Http, config: &RwLock<Config>, guild: &Guild, member: &mut Member) {
-    if {
+    let update_role = {
         let config = config.read().await;
-        config.should_update_role(&member)
-    } {
+        config.should_update_role(member)
+    };
+    if update_role {
         info!("Removing discord rank roles");
         for rank in memberdb::model::member::MANAGED_MEMBER_RANKS {
-            let _ = ctxw!(discord::remove_role_maybe(&http, rank.get_role(&guild), member).await);
-            let _ = ctxw!(discord::remove_role_maybe(&http, rank.get_group_role(&guild), member).await);
+            let _ = ctxw!(discord::remove_role_maybe(http, rank.get_role(guild), member).await);
+            let _ = ctxw!(discord::remove_role_maybe(http, rank.get_group_role(guild), member).await);
         }
     }
 
-    if {
+    let update_nick = {
         let config = config.read().await;
-        config.should_update_nick(&member)
-    } {
+        config.should_update_nick(member)
+    };
+    if update_nick {
         info!("Removing discord nickname");
         let result = member.edit(&http, |e| e.nickname("")).await;
         if let Err(why) = result {
