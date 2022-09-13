@@ -187,6 +187,7 @@ pub enum Column {
     WIgn,
     WOnline,
     WWeeklyOnline,
+    WAvgOnline,
     // Guild
     GRank,
     GXp,
@@ -205,7 +206,9 @@ impl Column {
         match self {
             Self::MId | Self::MRank | Self::MType | Self::MMcid | Self::MDiscord => None,
             Self::GRank | Self::GXp | Self::GWeeklyXp => Some(ProfileType::Guild),
-            Self::WGuild | Self::WIgn | Self::WOnline | Self::WWeeklyOnline => Some(ProfileType::Wynn),
+            Self::WGuild | Self::WIgn | Self::WOnline | Self::WWeeklyOnline | Self::WAvgOnline => {
+                Some(ProfileType::Wynn)
+            }
             _ => Some(ProfileType::Discord),
         }
     }
@@ -224,6 +227,7 @@ impl Column {
             Self::WIgn => "ign",
             Self::WOnline => "activity",
             Self::WWeeklyOnline => "activity_week",
+            Self::WAvgOnline => "activity_avg",
             Self::GRank | Self::MRank => "rank",
             Self::GXp => "xp",
             Self::GWeeklyXp => "xp_week",
@@ -247,6 +251,7 @@ impl FromStr for Column {
             "ign" => Self::WIgn,
             "online" => Self::WOnline,
             "weekly_online" => Self::WWeeklyOnline,
+            "avg_online" => Self::WAvgOnline,
             "guild_rank" => Self::GRank,
             "xp" => Self::GXp,
             "weekly_xp" => Self::GWeeklyXp,
@@ -267,6 +272,7 @@ pub enum Stat {
     WeeklyVoice,
     Online,
     WeeklyOnline,
+    AvgOnline,
     Xp,
     WeeklyXp,
 }
@@ -281,6 +287,7 @@ impl Stat {
             Column::DWeeklyVoice => Self::WeeklyVoice,
             Column::WOnline => Self::Online,
             Column::WWeeklyOnline => Self::WeeklyOnline,
+            Column::WAvgOnline => Self::AvgOnline,
             Column::GXp => Self::Xp,
             Column::GWeeklyXp => Self::WeeklyXp,
             _ => return None,
@@ -296,6 +303,7 @@ impl Stat {
             Self::WeeklyVoice => Column::DWeeklyVoice,
             Self::Online => Column::WOnline,
             Self::WeeklyOnline => Column::WWeeklyOnline,
+            Self::AvgOnline => Column::WAvgOnline,
             Self::Xp => Column::GXp,
             Self::WeeklyXp => Column::GWeeklyXp,
         }
@@ -305,7 +313,7 @@ impl Stat {
     pub fn parse_val(&self, val: &str) -> Result<u64> {
         match self {
             // parse as time duration
-            Self::Voice | Self::WeeklyVoice | Self::Online | Self::WeeklyOnline => {
+            Self::Voice | Self::WeeklyVoice | Self::Online | Self::WeeklyOnline | Self::AvgOnline => {
                 util::string::parse_second(val)
             }
             // parse as number

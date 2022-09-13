@@ -46,24 +46,6 @@
     },
     "query": "UPDATE discord SET message=message+?,message_week=message_week+? WHERE id=?"
   },
-  "131fb5cfdde791b5e336c2ac9149c9a32b88f5979cb0742880fd2497043de108": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Text"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Right": 0
-      }
-    },
-    "query": "SELECT id FROM wynn WHERE mid NOT NULL AND NOT EXISTS (SELECT 1 FROM member WHERE oid=wynn.mid AND mcid=wynn.id)"
-  },
   "158a4b406e86f3891ef61a25f198a81ff8495ed1590de6dd6f9dd5436c0877e7": {
     "describe": {
       "columns": [],
@@ -318,11 +300,23 @@
           "name": "activity_week",
           "ordinal": 7,
           "type_info": "Int64"
+        },
+        {
+          "name": "activity_avg",
+          "ordinal": 8,
+          "type_info": "Int64"
+        },
+        {
+          "name": "activity_avg_range",
+          "ordinal": 9,
+          "type_info": "Int64"
         }
       ],
       "nullable": [
         false,
         true,
+        false,
+        false,
         false,
         false,
         false,
@@ -375,24 +369,6 @@
       }
     },
     "query": "INSERT INTO member (mcid,type,rank) VALUES (?,?,?)"
-  },
-  "5bd9282d0cbce5c80689b919c961ead372b92a6b5674fbcad52976225f8b3bf2": {
-    "describe": {
-      "columns": [
-        {
-          "name": "rowid",
-          "ordinal": 0,
-          "type_info": "Int64"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Right": 0
-      }
-    },
-    "query": "SELECT oid FROM member WHERE (discord NOT NULL AND NOT EXISTS (SELECT 1 FROM discord WHERE id=member.discord AND mid=member.oid)) OR (mcid NOT NULL AND NOT EXISTS (SELECT 1 FROM wynn WHERE id=member.mcid AND mid=member.oid))"
   },
   "601db2a9a5d80259d68ab4fe37e8153f27fe0928a1dea4bdc2dd3e7c2a7bf8be": {
     "describe": {
@@ -555,24 +531,6 @@
       }
     },
     "query": "SELECT mcid FROM member where oid=?"
-  },
-  "7a78cbd8d386424e5c8c8ffe604e689d78a4b5b35bf286aaab3a68c4669293bf": {
-    "describe": {
-      "columns": [
-        {
-          "name": "rowid",
-          "ordinal": 0,
-          "type_info": "Int64"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Right": 0
-      }
-    },
-    "query": "SELECT oid FROM member WHERE (discord NOT NULL AND mcid NOT NULL AND type!='full') OR (discord NOT NULL AND mcid IS NULL AND type!='discord') OR (discord IS NULL AND mcid NOT NULL AND NOT (SELECT guild FROM wynn WHERE id=member.mcid) AND type!='wynn') OR (discord IS NULL AND mcid NOT NULL AND (SELECT guild FROM wynn WHERE id=member.mcid) AND type!='guild')"
   },
   "82d43343a59afd4d74b1f57cb30ad386454afb70c224224b83b8d015126c9a78": {
     "describe": {
@@ -773,24 +731,6 @@
       }
     },
     "query": "UPDATE guild SET xp_week=0"
-  },
-  "b70891b9783fc602c93c9cfea9cdfbfcd618de6eb3ec93991f13f10a9aa57dc7": {
-    "describe": {
-      "columns": [
-        {
-          "name": "id",
-          "ordinal": 0,
-          "type_info": "Int64"
-        }
-      ],
-      "nullable": [
-        false
-      ],
-      "parameters": {
-        "Right": 0
-      }
-    },
-    "query": "SELECT id FROM discord WHERE mid NOT NULL AND NOT EXISTS (SELECT 1 FROM member WHERE oid=discord.mid AND discord=discord.id)"
   },
   "b9ba586911d78b18b8f600799219fe27f8f2b8b9b115857e89c34032d074b722": {
     "describe": {

@@ -155,11 +155,14 @@ pub fn format_discord_stat_fields(discord: &Option<DiscordProfile>) -> Vec<(&str
 ///     emerald_week: 0,
 ///     activity: 70,
 ///     activity_week: 12,
+///     activity_avg: 5,
+///     activity_avg_range: 1,
 /// };
 ///
 /// assert!(format_wynn_stat_fields(&Some(profile)) == vec! [
 ///     ("Total Online Time", "1m 10s".to_string()),
 ///     ("Weekly Online Time", "12s".to_string()),
+///     ("Average Online Time", "5s".to_string())
 /// ]);
 /// assert!(format_wynn_stat_fields(&None).is_empty());
 /// ```
@@ -168,6 +171,7 @@ pub fn format_wynn_stat_fields(wynn: &Option<WynnProfile>) -> Vec<(&str, String)
         Some(wynn) => vec![
             ("Total Online Time", util::string::fmt_second(wynn.activity)),
             ("Weekly Online Time", util::string::fmt_second(wynn.activity_week)),
+            ("Average Online Time", util::string::fmt_second(wynn.activity_avg)),
         ],
         None => Vec::new(),
     }

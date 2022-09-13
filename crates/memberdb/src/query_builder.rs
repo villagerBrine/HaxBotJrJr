@@ -47,7 +47,7 @@ impl Selectable for Column {
                 }
             }
             // Columns of type Option<Time Duration>
-            Self::DVoice | Self::DWeeklyVoice | Self::WOnline | Self::WWeeklyOnline => {
+            Self::DVoice | Self::DWeeklyVoice | Self::WOnline | Self::WWeeklyOnline | Self::WAvgOnline => {
                 match row.get::<Option<i64>, _>(ident) {
                     Some(n) => util::string::fmt_second(n),
                     None => String::new(),
@@ -170,6 +170,7 @@ impl Selectable for Stat {
             Self::WeeklyVoice => "weekly_voice",
             Self::Online => "online",
             Self::WeeklyOnline => "weekly_online",
+            Self::AvgOnline => "avg_online",
             Self::Xp => "xp",
             Self::WeeklyXp => "weekly_xp",
         }

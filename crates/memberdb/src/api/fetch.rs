@@ -218,7 +218,7 @@ impl McId {
         Ok(GuildRank::from_str(&rank)?)
     }
 
-    /// Get a guild contributed xp
+    /// Get guild contributed xp
     pub async fn xp(&self, exe: &mut Executor<'_>) -> Result<i64> {
         Ok(exe
             .one(query!("SELECT xp FROM guild WHERE id=?", self))

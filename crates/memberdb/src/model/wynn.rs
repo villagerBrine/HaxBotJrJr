@@ -26,6 +26,8 @@ pub struct WynnProfileRow {
     pub emerald_week: i64,
     pub activity: i64,
     pub activity_week: i64,
+    pub activity_avg: i64,
+    pub activity_avg_range: i64,
 }
 
 #[derive(Debug)]
@@ -41,6 +43,8 @@ pub struct WynnProfile {
     pub emerald_week: i64,
     pub activity: i64,
     pub activity_week: i64,
+    pub activity_avg: i64,
+    pub activity_avg_range: i64,
 }
 
 impl WynnProfile {
@@ -48,13 +52,15 @@ impl WynnProfile {
     pub fn from_row(row: WynnProfileRow) -> WynnProfile {
         WynnProfile {
             id: McId(row.id),
-            mid: row.mid.map(|mid| MemberId(mid)),
+            mid: row.mid.map(MemberId),
             guild: row.guild > 0,
             ign: row.ign,
             emerald: row.emerald,
             emerald_week: row.emerald_week,
             activity: row.activity,
             activity_week: row.activity_week,
+            activity_avg: row.activity_avg,
+            activity_avg_range: row.activity_avg_range,
         }
     }
 }
