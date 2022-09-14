@@ -1,4 +1,6 @@
 //! Commands for displaying member statistics
+use std::fmt::Write as _;
+
 use anyhow::Context as AHContext;
 use serenity::client::Context;
 use serenity::framework::standard::macros::command;
@@ -39,7 +41,7 @@ async fn display_profile(ctx: &Context, msg: &Message, args: Args) -> CommandRes
         if arg.is_empty() {
             TargetId::Discord(msg.author.id)
         } else {
-            t!(db::parse_user_target(&ctx, &msg, &db, &client, &guild, args.rest()).await)
+            t!(db::parse_user_target(ctx, msg, &db, &client, &guild, args.rest()).await)
         }
     };
     let profiles = {
@@ -114,7 +116,7 @@ async fn display_profile(ctx: &Context, msg: &Message, args: Args) -> CommandRes
 ///
 /// > **"filters" can also contains stat filters**
 /// Following stats can be filtered: `message`, `weekly_message`, `voice`, `weekly_voice`, `online`,
-/// `weekly_online`, `xp`, `weekly_xp`.
+/// `weekly_online`, `avg_online`, `xp`, `weekly_xp`.
 ///
 /// With just the stat name, it filters out anyone with that stat as 0. Ex `online` filters out
 /// anyone with no online time.
@@ -146,7 +148,7 @@ async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
         let db = db.read().await;
         ctx!(memberdb::table::list_members(&ctx.cache, &db, &filters).await, "Failed to get members list")?
     };
-    if table.len() == 0 {
+    if table.is_empty() {
         finish!(ctx, msg, "Found 0 member");
     }
 
@@ -169,8 +171,8 @@ async fn list_member(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
 /// any styling. Useful if you are viewing it on a small screen.
 ///
 /// > **"stat" can be following values:**
-/// `message`, `weekly_message`, `voice`, `weekly_voice`, `online`, `weekly_online`, `xp`,
-/// `weekly_xp`.
+/// `message`, `weekly_message`, `voice`, `weekly_voice`, `online`, `weekly_online`, `avg_online`,
+/// `xp`, `weekly_xp`.
 ///
 /// > **"filters" can be any numbers of the following values separated by space**
 /// `full`, `partial`, `guild`, `discord`, `wynn` (member type),
@@ -216,7 +218,7 @@ async fn stat_leaderboard(ctx: &Context, msg: &Message, mut args: Args) -> Comma
             "Failed to get stat leaderboard"
         )?
     };
-    if table.len() == 0 {
+    if table.is_empty() {
         finish!(ctx, msg, "leaderboard empty");
     }
 
@@ -243,7 +245,7 @@ async fn display_member_info(ctx: &Context, msg: &Message, args: Args) -> Comman
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
     let (db, client) = data!(ctx, "db", "reqwest");
 
-    let mid = t!(db::parse_user_target_mid(&ctx, &msg, &db, &client, &guild, args.rest()).await);
+    let mid = t!(db::parse_user_target_mid(ctx, msg, &db, &client, &guild, args.rest()).await);
     let member = {
         let db = db.read().await;
         some!(
@@ -258,15 +260,15 @@ async fn display_member_info(ctx: &Context, msg: &Message, args: Args) -> Comman
     if let Some(mcid) = member.mcid {
         let db = db.read().await;
         let ign = ctx!(mcid.ign(&mut db.exe()).await, "Failed to get wynn.ign")?;
-        content.push_str(&format!("\n**Minecraft** {} `{}`", ign, mcid));
+        write!(content, "\n**Minecraft** {} `{}`", ign, mcid)?;
 
         if let Ok(rank) = mcid.rank(&mut db.exe()).await {
-            content.push_str(&format!("\n**Guild** {}", rank));
+            write!(content, "\n**Guild** {}", rank)?;
         }
     }
     if let Some(id) = member.discord {
         let user = some!(id.to_user(&ctx.cache), cmd_bail!("Failed to get discord user"));
-        content.push_str(&format!("\n**Discord** {}#{} `{}`", user.name, user.discriminator, id));
+        write!(content, "\n**Discord** {}#{} `{}`", user.name, user.discriminator, id)?;
     }
 
     finish!(ctx, msg, content)
@@ -348,8 +350,8 @@ async fn display_table(ctx: &Context, msg: &Message, mut args: Args) -> CommandR
         finish!(ctx, msg, "No columns specified");
     }
     let mut actions = Vec::with_capacity(filters.len() + sorts.len());
-    actions.append(&mut filters.into_iter().map(|f| QueryMod::Filter(f)).collect());
-    actions.append(&mut sorts.into_iter().map(|s| QueryMod::Sort(s)).collect());
+    actions.append(&mut filters.into_iter().map(QueryMod::Filter).collect());
+    actions.append(&mut sorts.into_iter().map(QueryMod::Sort).collect());
 
     let db = data!(ctx, "db");
 
@@ -360,7 +362,7 @@ async fn display_table(ctx: &Context, msg: &Message, mut args: Args) -> CommandR
             "Failed to get stat leaderboard"
         )?
     };
-    if table.len() == 0 {
+    if table.is_empty() {
         finish!(ctx, msg, "leaderboard empty");
     }
 
