@@ -28,11 +28,11 @@ use tracing::{info, instrument, warn};
 use util::ctx;
 
 use crate::events::DBEvent;
+use crate::model::db::Stat;
 use crate::model::discord::DiscordId;
 use crate::model::guild::GuildRank;
 use crate::model::member::{MemberId, MemberRank, MemberType};
 use crate::model::wynn::McId;
-use crate::model::db::Stat;
 use crate::{Transaction, DB};
 
 impl MemberId {
@@ -564,6 +564,18 @@ impl McId {
         Ok(())
     }
 
+    async fn update_avg_activity(tx: &mut Transaction) -> Result<()> {
+        query!("UPDATE wynn SET activity_avg_range=activity_avg_range+1")
+            .execute(&mut tx.tx)
+            .await
+            .context("Failed to increment wynn.activity_avg_range")?;
+        query!("UPDATE wynn SET activity_avg=(activity_avg+activity_week)/activity_avg_range")
+            .execute(&mut tx.tx)
+            .await
+            .context("Failed to update wynn.activity_avg")?;
+        Ok(())
+    }
+
     /// Update a wynn profile's ign.
     pub async fn set_ign(&self, tx: &mut Transaction, ign: &str) -> Result<()> {
         info!(?self, ign, "Updating wynn ign");
@@ -712,23 +724,26 @@ pub async fn weekly_reset(db: &DB, cache: &Cache) -> Result<()> {
     let online_lb = crate::table::stat_leaderboard(cache, db, &Stat::WeeklyOnline, &v).await?;
     let xp_lb = crate::table::stat_leaderboard(cache, db, &Stat::WeeklyXp, &v).await?;
 
-    // Transaction isn't used because the following queries aren't related and the WeeklyReset
-    // event needs to be broadcasted regardless of error.
     info!("Resetting discord weekly stats");
-    let _ = ctx!(
+    ctx!(
         query!("UPDATE discord SET message_week=0,voice_week=0").execute(&db.pool).await,
         "Failed to set discord weekly stats to 0"
-    );
+    )?;
+
     info!("Resetting wynn weekly stats");
-    let _ = ctx!(
+    let mut tx = db.begin().await?;
+    McId::update_avg_activity(&mut tx).await?;
+    tx.commit().await?;
+    ctx!(
         query!("UPDATE wynn SET activity_week=0").execute(&db.pool).await,
         "Failed to set wynn weekly stats to 0"
-    );
+    )?;
+
     info!("Resetting guild weekly stats");
-    let _ = ctx!(
+    ctx!(
         query!("UPDATE guild SET xp_week=0").execute(&db.pool).await,
         "Failed to set guild weekly stats to 0"
-    );
+    )?;
 
     db.signal(DBEvent::WeeklyReset { message_lb, voice_lb, online_lb, xp_lb });
     Ok(())
