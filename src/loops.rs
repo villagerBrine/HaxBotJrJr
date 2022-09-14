@@ -273,7 +273,8 @@ pub async fn get_discord_member_db(
 /// Get discord member via `DiscordId`
 pub async fn get_discord_member(cache_http: &CacheAndHttp, guild: &Guild, id: DiscordId) -> Option<Member> {
     let user_id = ok!(u64::try_from(id.0), "Failed to convert DiscordId to UserId", return None);
-    let member = ok!(guild.member(&cache_http, user_id).await, "Failed to get discord member", return None);
+    let member =
+        ok!(ctxw!(guild.member(&cache_http, user_id).await, "Failed to get discord member"), return None);
     Some(member)
 }
 
