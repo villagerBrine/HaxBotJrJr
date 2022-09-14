@@ -42,7 +42,7 @@ struct Members;
 struct MemberManagement;
 
 #[group]
-#[commands(get_rank_symbols, utc_now)]
+#[commands(get_rank_symbols, utc_now, list_igns)]
 struct Utilities;
 
 #[group]

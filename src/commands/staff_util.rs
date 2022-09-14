@@ -1,4 +1,7 @@
 //! Staf util commands
+use std::collections::HashSet;
+use std::fmt::Write as _;
+
 use serenity::client::Context;
 use serenity::framework::standard::macros::command;
 use serenity::framework::standard::{Args, CommandResult};
@@ -148,8 +151,43 @@ async fn get_rank_symbols(ctx: &Context, msg: &Message, _: Args) -> CommandResul
     let mut content = String::new();
 
     for rank in memberdb::model::member::MEMBER_RANKS {
-        content.push_str(&format!("**{}** `{}`\n", rank, rank.get_symbol()));
+        writeln!(content, "**{}** `{}`", rank, rank.get_symbol())?;
     }
+
+    finish!(ctx, msg, content)
+}
+
+#[command("igns")]
+#[usage("[omits]")]
+#[example("")]
+#[example("Pucaet SephDark18")]
+/// List all member igns.
+///
+/// If a list of igns are provided, then those igns are omitted from the output list.
+/// For example `igns Pucaet` would output all member igns except `Pucaet`.
+async fn list_igns(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let omit: HashSet<&str> = args.raw().collect();
+
+    let db = data!(ctx, "db");
+
+    let mut igns = {
+        let db = db.read().await;
+        McId::igns(&mut db.exe()).await?
+    };
+    igns.sort_by_key(|s| s.to_ascii_lowercase());
+
+    let content = if omit.is_empty() {
+        let igns = igns.join(" ");
+        format!("`{}`", igns)
+    } else {
+        let mut content = "`".to_string();
+        let igns = igns.iter().filter(|s| !omit.contains(&s.as_str()));
+        for ign in igns {
+            write!(content, "{} ", ign)?;
+        }
+        content.push('`');
+        content
+    };
 
     finish!(ctx, msg, content)
 }
