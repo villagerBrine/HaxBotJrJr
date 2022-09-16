@@ -15,8 +15,8 @@ pub async fn fix_discord_roles(
     http: &Http, rank: MemberRank, guild: &Guild, member: &mut Member,
 ) -> Result<()> {
     if memberdb::model::member::MANAGED_MEMBER_RANKS.contains(&rank) {
-        discord::add_role_maybe(&http, rank.get_role(&guild), member).await?;
-        discord::add_role_maybe(&http, rank.get_group_role(&guild), member).await?;
+        discord::add_role_maybe(http, rank.get_role(guild), member).await?;
+        discord::add_role_maybe(http, rank.get_group_role(guild), member).await?;
     }
 
     for other_rank in memberdb::model::member::MANAGED_MEMBER_RANKS {
@@ -24,9 +24,9 @@ pub async fn fix_discord_roles(
             continue;
         }
 
-        discord::remove_role_maybe(&http, other_rank.get_role(&guild), member).await?;
+        discord::remove_role_maybe(http, other_rank.get_role(guild), member).await?;
         if !rank.is_same_group(other_rank) {
-            discord::remove_role_maybe(&http, other_rank.get_group_role(&guild), member).await?;
+            discord::remove_role_maybe(http, other_rank.get_group_role(guild), member).await?;
         }
     }
 
@@ -142,7 +142,7 @@ fn push_empty_or(row_s: &mut String, s: &str) {
 }
 
 /// Format a 2d vector into a minimal table
-fn make_minimal_table<F>(data: &Vec<Vec<&str>>, page_info: Option<(usize, usize)>, fmt: F) -> String
+fn make_minimal_table<F>(data: &[Vec<&str>], page_info: Option<(usize, usize)>, fmt: F) -> String
 where
     F: Fn(&mut String, usize, &str),
 {

@@ -2,7 +2,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use memberdb::voice_tracker::{VoiceTracker, VoiceTrackerContainer};
+use memberdb::voice_tracker::VoiceTracker;
 use serenity::client::bridge::gateway::ShardManager;
 use serenity::prelude::{Mutex as SMutex, TypeMapKey};
 use serenity::Client;
@@ -36,15 +36,16 @@ impl BotData {
         let config = Arc::new(RwLock::new(config));
         let db = DB::new(member_db_file, 5).await;
         let db = Arc::new(RwLock::new(db));
+        let voice_tracker = Arc::new(Mutex::new(VoiceTracker::new()));
         Self {
             db,
             config,
-            reqwest_client: ReqClientContainer::new().await,
+            reqwest_client: make_reqwest_clinet(),
             wynn_signal: WynnSignal::new(64),
             discord_signal: DiscordSignal::new(64),
             timer_signal: TimerSignal::new(1),
             wynn_cache,
-            voice_tracker: VoiceTrackerContainer::new(),
+            voice_tracker,
         }
     }
 
@@ -56,7 +57,7 @@ impl BotData {
         data.insert::<ReqClientContainer>(self.reqwest_client.clone());
         data.insert::<Cache>(self.wynn_cache.clone());
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
-        data.insert::<VoiceTrackerContainer>(self.voice_tracker.clone());
+        data.insert::<VoiceTracker>(self.voice_tracker.clone());
     }
 }
 
@@ -74,12 +75,9 @@ impl TypeMapKey for ReqClientContainer {
     type Value = reqwest::Client;
 }
 
-impl ReqClientContainer {
-    /// Create a new `reqwest::Client`
-    pub async fn new() -> reqwest::Client {
-        reqwest::ClientBuilder::new()
-            .timeout(Duration::from_secs(5))
-            .build()
-            .expect("Failed to build reqwest client")
-    }
+fn make_reqwest_clinet() -> reqwest::Client {
+    reqwest::ClientBuilder::new()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .expect("Failed to build reqwest client")
 }

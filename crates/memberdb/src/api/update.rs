@@ -135,7 +135,7 @@ impl MemberId {
     ///
     /// # Preconditions
     /// The member has both discord and mc linked
-    async fn to_full_member(&self, tx: &mut Transaction) -> Result<()> {
+    async fn set_full_member(&self, tx: &mut Transaction) -> Result<()> {
         info!(?self, "Updating member type to full");
         query!("UPDATE member SET type=? WHERE oid=?", MemberType::Full, self)
             .execute(&mut tx.tx)
@@ -149,7 +149,7 @@ impl MemberId {
     ///
     /// # Preconditions
     /// The member has only mc linked and is in guild
-    async fn to_guild_partial(&self, tx: &mut Transaction) -> Result<()> {
+    async fn set_guild_partial(&self, tx: &mut Transaction) -> Result<()> {
         info!(?self, "Updating member type to guild partial");
         query!("UPDATE member SET type=? WHERE oid=?", MemberType::GuildPartial, self)
             .execute(&mut tx.tx)
@@ -181,7 +181,7 @@ impl MemberId {
             .await
             .context("Failed to fetch member.discord")?
             .discord
-            .map(|id| DiscordId(id));
+            .map(DiscordId);
 
         // checks for early return
         if discord_old.is_none() && discord_new.is_none() {
@@ -221,7 +221,7 @@ impl MemberId {
                         if mcid.in_guild(&mut tx.exe()).await? {
                             info!("Member is in guild, demote to guild partial");
                             let before = self.kind(&mut tx.exe()).await?;
-                            self.to_guild_partial(tx).await?;
+                            self.set_guild_partial(tx).await?;
                             tx.signal(DBEvent::MemberAutoGuildDemote { mid: *self, before });
                         } else {
                             info!("Member not in guild, removing");
@@ -256,7 +256,7 @@ impl MemberId {
                 info!(?self, "Checking if member should be promoted");
                 match self.kind(&mut tx.exe()).await? {
                     before @ MemberType::GuildPartial | before @ MemberType::WynnPartial => {
-                        self.to_full_member(tx).await?;
+                        self.set_full_member(tx).await?;
                         tx.signal(DBEvent::MemberFullPromote { mid: *self, before });
                     }
                     _ => {}
@@ -292,7 +292,7 @@ impl MemberId {
             .await
             .context("Failed to fetch wynn binding from member table")?
             .mcid;
-        let mcid_old = mcid_old.map(|id| McId(id));
+        let mcid_old = mcid_old.map(McId);
 
         let member_type = self.kind(&mut tx.exe()).await?;
         if let MemberType::WynnPartial | MemberType::Full = member_type {
@@ -311,7 +311,7 @@ impl MemberId {
                         self.bind_discord(tx, None).await?;
                     } else {
                         // If member is wynn partial, then set the member type directly
-                        self.to_guild_partial(tx).await?;
+                        self.set_guild_partial(tx).await?;
                     }
                     tx.signal(DBEvent::MemberAutoGuildDemote {
                         mid: *self,
@@ -370,7 +370,7 @@ impl MemberId {
             // Checking if member should be promoted
             if let MemberType::DiscordPartial = member_type {
                 info!("Added wynn binding to discord partial, promoting to full");
-                self.to_full_member(tx).await?;
+                self.set_full_member(tx).await?;
                 tx.signal(DBEvent::MemberFullPromote {
                     mid: *self,
                     before: MemberType::DiscordPartial,

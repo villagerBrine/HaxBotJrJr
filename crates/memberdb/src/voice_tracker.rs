@@ -53,16 +53,12 @@ impl VoiceTracker {
     }
 }
 
-/// Bot data key for `VoiceTracker`
-pub struct VoiceTrackerContainer;
-
-impl TypeMapKey for VoiceTrackerContainer {
-    type Value = Arc<Mutex<VoiceTracker>>;
+impl Default for VoiceTracker {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
-impl VoiceTrackerContainer {
-    /// Create a new `VoiceTracker` container
-    pub fn new() -> Arc<Mutex<VoiceTracker>> {
-        Arc::new(Mutex::new(VoiceTracker::new()))
-    }
+impl TypeMapKey for VoiceTracker {
+    type Value = Arc<Mutex<VoiceTracker>>;
 }

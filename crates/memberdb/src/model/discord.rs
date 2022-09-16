@@ -72,7 +72,7 @@ impl DiscordProfile {
     pub fn from_row(row: DiscordProfileRow) -> Result<DiscordProfile> {
         Ok(DiscordProfile {
             id: DiscordId(row.id),
-            mid: row.mid.map(|mid| MemberId(mid)),
+            mid: row.mid.map(MemberId),
             message: row.message,
             message_week: row.message_week,
             image: row.image,

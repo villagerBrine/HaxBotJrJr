@@ -144,7 +144,7 @@ pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Co
                 ok!(ctx!(receiver.recv().await, "Failed to receive wynn events in log loop"), continue);
 
             for event in events.as_ref() {
-                let tag = some!(get_log_channel_tag(&event), continue);
+                let tag = some!(get_log_channel_tag(event), continue);
                 // Do not log if there are no log channels
                 {
                     let config = config.read().await;
@@ -174,7 +174,7 @@ pub async fn start_log_loop(cache_http: Arc<CacheAndHttp>, config: Arc<RwLock<Co
                     }
                     _ => {
                         // Make the log message and add it to buffer
-                        let log = some!(make_wynn_log(&event), continue);
+                        let log = some!(make_wynn_log(event), continue);
                         {
                             let mut buffers = buffers.lock().unwrap();
                             let buffer = buffers.get_mut(&tag).unwrap();
@@ -248,7 +248,7 @@ pub async fn start_summary_loop(
 /// Build summary messages from stat leaderboard and send them
 async fn send_summary(cache_http: &CacheAndHttp, config: &RwLock<Config>, lb: &Vec<Vec<&str>>) -> Result<()> {
     // If leaderboard is empty
-    if lb.len() == 0 {
+    if lb.is_empty() {
         let config = config.read().await;
         ctx!(
             config

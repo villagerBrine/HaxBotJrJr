@@ -252,8 +252,8 @@ impl Member {
         let member_type = MemberType::from_str(&row.member_type)?;
         Ok(Member {
             id: MemberId(row.id),
-            discord: row.discord.map(|id| DiscordId(id)),
-            mcid: row.mcid.map(|id| McId(id)),
+            discord: row.discord.map(DiscordId),
+            mcid: row.mcid.map(McId),
             member_type,
             rank,
         })

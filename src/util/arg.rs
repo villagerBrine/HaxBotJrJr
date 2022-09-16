@@ -119,20 +119,22 @@ pub async fn arg_check(ctx: &Context, msg: &Message, args: &mut Args) -> Termina
 
 /// Same as `arg_check` buts accepts `Vec<String>` instead of `Args`
 async fn arg_check_list(ctx: &Context, msg: &Message, arg_list: Vec<String>) -> Terminator<()> {
-    if arg_list.len() == 1 {
-        let _ = ctx!(
-            msg.reply(ctx, format!("Unrecognized argument `{}`", arg_list.get(0).unwrap()))
-                .await
-        );
-        Terminator::Terminate
-    } else if arg_list.len() > 1 {
-        let _ = ctx!(
-            msg.reply(ctx, format!("Unrecognized arguments `{}`", arg_list.join("`, `")))
-                .await
-        );
-        Terminator::Terminate
-    } else {
-        Terminator::Proceed(())
+    match arg_list.len() {
+        0 => Terminator::Proceed(()),
+        1 => {
+            let _ = ctx!(
+                msg.reply(ctx, format!("Unrecognized argument `{}`", arg_list.get(0).unwrap()))
+                    .await
+            );
+            Terminator::Terminate
+        }
+        _ => {
+            let _ = ctx!(
+                msg.reply(ctx, format!("Unrecognized arguments `{}`", arg_list.join("`, `")))
+                    .await
+            );
+            Terminator::Terminate
+        }
     }
 }
 
@@ -245,15 +247,15 @@ macro_rules! arg {
 /// using `flag`.
 macro_rules! flag {
     ($ctx:ident, $msg:ident, $args:ident, $flag:literal) => {{
-        let flag = crate::util::arg::consume_raw(&mut $args, $flag);
+        let flag = $crate::util::arg::consume_raw(&mut $args, $flag);
         $args.quoted();
         if $args.remaining() > 0 {
-            crate::t!(crate::util::arg::arg_check($ctx, $msg, &mut $args).await);
+            $crate::t!($crate::util::arg::arg_check($ctx, $msg, &mut $args).await);
         }
         flag
     }};
     ($ctx:ident, $msg:ident, $args:ident, $($flag:literal),+) => {{
-        let mut args = crate::util::arg::rest(&mut $args);
+        let mut args = $crate::util::arg::rest(&mut $args);
         let flags = ($(match args.iter().position(|arg| arg == $flag) {
             Some(i) => {
                 args.remove(i);
@@ -261,7 +263,7 @@ macro_rules! flag {
             }
             None => false
         },)+);
-        crate::t!(crate::util::arg::arg_check_list($ctx, $msg, args).await);
+        $crate::t!($crate::util::arg::arg_check_list($ctx, $msg, args).await);
         flags
     }}
 }

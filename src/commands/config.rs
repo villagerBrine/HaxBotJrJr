@@ -1,4 +1,6 @@
 //! Configuration commands
+use std::fmt::Write as _;
+
 use anyhow::Context as AHContext;
 use serenity::client::{Cache, Context};
 use serenity::framework::standard::macros::command;
@@ -70,7 +72,7 @@ async fn add_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
     let tag = arg!(ctx, msg, args, "tag": Tags);
     let target_arg = args.rest();
 
-    let target = match DiscordObject::from_str(&ctx, &guild, &target_arg).await {
+    let target = match DiscordObject::from_str(&ctx, &guild, target_arg).await {
         Ok(v) => v,
         Err(why) => finish!(ctx, msg, format!("Invalid target: {}", why)),
     };
@@ -144,7 +146,7 @@ async fn remove_tag(ctx: &Context, msg: &Message, mut args: Args) -> CommandResu
     let tag = arg!(ctx, msg, args, "tag": Tags);
     let target_arg = args.rest();
 
-    let target = match DiscordObject::from_str(&ctx, &guild, &target_arg).await {
+    let target = match DiscordObject::from_str(&ctx, &guild, target_arg).await {
         Ok(v) => v,
         Err(why) => finish!(ctx, msg, format!("Invalid target: {}", why)),
     };
@@ -330,26 +332,26 @@ async fn list_tagged(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
             {
                 let config = config.read().await;
                 for user_id in config.user_tags.tagged_objects(&tag) {
-                    content.push_str(&format!("<@!{}> ", user_id));
+                    write!(content, "<@!{}> ", user_id)?;
                 }
             }
             {
                 let config = config.read().await;
                 for role_id in config.user_role_tags.tagged_objects(&tag) {
-                    content.push_str(&format!("<@&{}> ", role_id));
+                    write!(content, "<@&{}> ", role_id)?;
                 }
             }
         }
         Tags::Channel(tag) => {
             let config = config.read().await;
             for channel_id in config.channel_tags.tagged_objects(&tag) {
-                content.push_str(&format!("<#{}> ", channel_id));
+                write!(content, "<#{}> ", channel_id)?;
             }
         }
         Tags::TextChannel(tag) => {
             let config = config.read().await;
             for channel_id in config.text_channel_tags.tagged_objects(&tag) {
-                content.push_str(&format!("<#{}> ", channel_id));
+                write!(content, "<#{}> ", channel_id)?;
             }
         }
     }
@@ -360,7 +362,7 @@ async fn list_tagged(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
 async fn get_channel_parent_tag_lists(
     cache: &Cache, config: &RwLock<Config>, channel: &GuildChannel,
 ) -> (Option<String>, Option<String>) {
-    let (category_id, parent_id) = util::discord::get_channel_parents(&cache, &channel);
+    let (category_id, parent_id) = util::discord::get_channel_parents(cache, channel);
     let category_tags = match category_id {
         Some(id) => {
             let config = config.read().await;
@@ -381,14 +383,14 @@ async fn get_channel_tag_list(config: &RwLock<Config>, channel_id: &u64) -> Opti
         let config = config.read().await;
         config
             .channel_tags
-            .get(&channel_id)
+            .get(channel_id)
             .map(|tags| string::str_join_iter(tags.iter()))
     };
     let text_channel_tags = {
         let config = config.read().await;
         config
             .text_channel_tags
-            .get(&channel_id)
+            .get(channel_id)
             .map(|tags| string::str_join_iter(tags.iter()))
     };
 

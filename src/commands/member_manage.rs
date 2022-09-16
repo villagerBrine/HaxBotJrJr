@@ -5,9 +5,9 @@ use serenity::model::channel::Message;
 use tokio::sync::RwLock;
 
 use memberdb::events::DBEvent;
+use memberdb::model::db::ProfileType;
 use memberdb::model::discord::DiscordId;
 use memberdb::model::member::{MemberId, MemberRank, MemberType};
-use memberdb::model::db::ProfileType;
 use memberdb::model::wynn::McId;
 use memberdb::DB;
 use util::{ctx, ok, some};
@@ -36,7 +36,7 @@ pub async fn add_member(ctx: &Context, msg: &Message, mut args: Args) -> Command
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
 
     let (discord_member, discord_id, mcid) =
-        t!(db::get_profile_ids(&ctx, &msg, &guild, &client, &discord_name, &ign).await);
+        t!(db::get_profile_ids(ctx, msg, &guild, &client, &discord_name, &ign).await);
 
     // Check for precondition. Both profiles has to be unlinked
     let (wynn_mid, discord_mid) = db::get_profile_mids(&db, discord_id, &mcid).await;
@@ -56,8 +56,7 @@ profiles on an existing member, use the command `link` instead");
     let rank = match guild_rank {
         Ok(guild_rank) => guild_rank.to_member_rank(),
         Err(_) => {
-            match memberdb::utils::get_discord_member_rank(&ctx, &guild, &discord_member.as_ref().user).await
-            {
+            match memberdb::utils::get_discord_member_rank(ctx, &guild, &discord_member.as_ref().user).await {
                 Ok(Some(rank)) => rank,
                 _ => memberdb::model::member::INIT_MEMBER_RANK,
             }
@@ -112,7 +111,7 @@ pub async fn link_profile(ctx: &Context, msg: &Message, mut args: Args) -> Comma
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
 
     let (_discord_member, discord_id, mcid) =
-        t!(db::get_profile_ids(&ctx, &msg, &guild, &client, &discord_name, &ign).await);
+        t!(db::get_profile_ids(ctx, msg, &guild, &client, &discord_name, &ign).await);
 
     let (wynn_mid, discord_mid) = crate::util::db::get_profile_mids(&db, discord_id, &mcid).await;
     if discord_mid.and(wynn_mid).is_some() && discord_mid == wynn_mid {
@@ -234,7 +233,7 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
             }
 
             let rank =
-                match memberdb::utils::get_discord_member_rank(&ctx, &guild, &discord_member.as_ref().user)
+                match memberdb::utils::get_discord_member_rank(ctx, &guild, &discord_member.as_ref().user)
                     .await
                 {
                     Ok(Some(rank)) => rank,
@@ -283,7 +282,7 @@ async fn add_partial(ctx: &Context, msg: &Message, mut args: Args) -> CommandRes
                 };
                 let mut tx = ctx!(db.begin().await)?;
                 let r = ctx!(
-                    MemberId::add_wynn_partial(&mut tx, &mcid, rank, &target_arg).await,
+                    MemberId::add_wynn_partial(&mut tx, &mcid, rank, target_arg).await,
                     "Failed to add wynn partial member"
                 );
                 if r.is_ok() {
@@ -328,7 +327,7 @@ async fn unlink_profile(ctx: &Context, msg: &Message, mut args: Args) -> Command
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message guild"));
     let (db, client) = data!(ctx, "db", "reqwest");
 
-    let mid = t!(db::parse_user_target_mid(&ctx, &msg, &db, &client, &guild, target_arg).await);
+    let mid = t!(db::parse_user_target_mid(ctx, msg, &db, &client, &guild, target_arg).await);
 
     let (old_discord, old_mcid) = {
         let db = db.read().await;
@@ -411,7 +410,7 @@ pub async fn remove_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
     let (db, client) = data!(ctx, "db", "reqwest");
 
-    let mid = t!(db::parse_user_target_mid(&ctx, &msg, &db, &client, &guild, args.rest()).await);
+    let mid = t!(db::parse_user_target_mid(ctx, msg, &db, &client, &guild, args.rest()).await);
 
     let member_type = {
         let db = db.read().await;
@@ -513,14 +512,14 @@ pub async fn set_member_rank(ctx: &Context, msg: &Message, mut args: Args) -> Co
 
     let rank = arg!(ctx, msg, args, "rank": MemberRank);
 
-    let mid = t!(db::parse_user_target_mid(&ctx, &msg, &db, &client, &guild, args.rest()).await);
+    let mid = t!(db::parse_user_target_mid(ctx, msg, &db, &client, &guild, args.rest()).await);
 
     let old_rank = {
         let db = db.read().await;
         ctx!(mid.rank(&mut db.exe()).await)?
     };
 
-    set_rank(&ctx, &msg, &db, mid, old_rank, rank).await
+    set_rank(ctx, msg, &db, mid, old_rank, rank).await
 }
 
 #[command("promote")]
@@ -544,7 +543,7 @@ pub async fn promote_member(ctx: &Context, msg: &Message, args: Args) -> Command
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
     let (db, client) = data!(ctx, "db", "reqwest");
 
-    let mid = t!(db::parse_user_target_mid(&ctx, &msg, &db, &client, &guild, args.rest()).await);
+    let mid = t!(db::parse_user_target_mid(ctx, msg, &db, &client, &guild, args.rest()).await);
 
     let old_rank = {
         let db = db.read().await;
@@ -552,7 +551,7 @@ pub async fn promote_member(ctx: &Context, msg: &Message, args: Args) -> Command
     };
     let rank = some!(old_rank.promote(), finish!(ctx, msg, "Member is already the highest rank"));
 
-    set_rank(&ctx, &msg, &db, mid, old_rank, rank).await
+    set_rank(ctx, msg, &db, mid, old_rank, rank).await
 }
 
 #[command("demote")]
@@ -576,7 +575,7 @@ pub async fn demote_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
     let guild = some!(msg.guild(&ctx), cmd_bail!("Failed to get message's guild"));
     let (db, client) = data!(ctx, "db", "reqwest");
 
-    let mid = t!(db::parse_user_target_mid(&ctx, &msg, &db, &client, &guild, args.rest()).await);
+    let mid = t!(db::parse_user_target_mid(ctx, msg, &db, &client, &guild, args.rest()).await);
 
     let old_rank = {
         let db = db.read().await;
@@ -584,7 +583,7 @@ pub async fn demote_member(ctx: &Context, msg: &Message, args: Args) -> CommandR
     };
     let rank = some!(old_rank.demote(), finish!(ctx, msg, "Member is already the lowest rank"));
 
-    set_rank(&ctx, &msg, &db, mid, old_rank, rank).await
+    set_rank(ctx, msg, &db, mid, old_rank, rank).await
 }
 
 /// Checks if a member has a linked wynn profile, if so, return Some(ign).

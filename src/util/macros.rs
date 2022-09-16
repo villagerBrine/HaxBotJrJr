@@ -166,7 +166,7 @@ macro_rules! data {
         }
     };
     (INTERNAL; "vc", $data:ident) => {
-        match $data.get::<memberdb::voice_tracker::VoiceTrackerContainer>() {
+        match $data.get::<memberdb::voice_tracker::VoiceTracker>() {
             Some(v) => v.clone(),
             None => $crate::cmd_bail!("Failed to access vc tracker"),
         }
