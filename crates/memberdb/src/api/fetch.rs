@@ -34,21 +34,21 @@ impl MemberId {
             .is_some())
     }
 
-    //     pub async fn discord(&self, exe: &mut Executor<'_>) -> Result<Option<DiscordId>> {
-    //         let row = exe
-    //             .one(query!("SELECT discord FROM member WHERE oid=?", self))
-    //             .await
-    //             .context("Failed to fetch member.discord")?;
-    //         Ok(row.discord)
-    //     }
+    pub async fn discord(&self, exe: &mut Executor<'_>) -> Result<Option<DiscordId>> {
+        let row = exe
+            .one(query!("SELECT discord FROM member WHERE oid=?", self))
+            .await
+            .context("Failed to fetch member.discord")?;
+        Ok(row.discord.map(DiscordId))
+    }
 
-    //     pub async fn mcid(&self, exe: &mut Executor<'_>) -> Result<Option<McId>> {
-    //         let row = exe
-    //             .one(query!("SELECT mcid FROM member WHERE oid=?", self))
-    //             .await
-    //             .context("Failed to fetch member.mcid")?;
-    //         Ok(row.mcid)
-    //     }
+    pub async fn mcid(&self, exe: &mut Executor<'_>) -> Result<Option<McId>> {
+        let row = exe
+            .one(query!("SELECT mcid FROM member WHERE oid=?", self))
+            .await
+            .context("Failed to fetch member.mcid")?;
+        Ok(row.mcid.map(McId))
+    }
 
     pub async fn links(&self, exe: &mut Executor<'_>) -> Result<(Option<DiscordId>, Option<McId>)> {
         let row = exe
@@ -112,6 +112,38 @@ impl DiscordId {
             .await
             .context("Failed to check if discord profile exists")?
             .is_some())
+    }
+
+    pub async fn message(&self, exe: &mut Executor<'_>) -> Result<i64> {
+        let row = exe
+            .one(query!("SELECT message FROM discord WHERE id=?", self))
+            .await
+            .context("Failed to fetch discord.message")?;
+        Ok(row.message)
+    }
+
+    pub async fn weekly_message(&self, exe: &mut Executor<'_>) -> Result<i64> {
+        let row = exe
+            .one(query!("SELECT message_week FROM discord WHERE id=?", self))
+            .await
+            .context("Failed to fetch discord.message_week")?;
+        Ok(row.message_week)
+    }
+
+    pub async fn voice_time(&self, exe: &mut Executor<'_>) -> Result<i64> {
+        let row = exe
+            .one(query!("SELECT voice FROM discord WHERE id=?", self))
+            .await
+            .context("Failed to fetch discord.voice")?;
+        Ok(row.voice)
+    }
+
+    pub async fn weekly_voice_time(&self, exe: &mut Executor<'_>) -> Result<i64> {
+        let row = exe
+            .one(query!("SELECT voice_week FROM discord WHERE id=?", self))
+            .await
+            .context("Failed to fetch discord.voice_week")?;
+        Ok(row.voice_week)
     }
 }
 
@@ -225,6 +257,46 @@ impl McId {
             .await
             .context("Failed to get guild.xp")?
             .xp)
+    }
+
+    pub async fn weekly_xp(&self, exe: &mut Executor<'_>) -> Result<i64> {
+        Ok(exe
+            .one(query!("SELECT xp_week FROM guild WHERE id=?", self))
+            .await
+            .context("Failed to get guild.xp_week")?
+            .xp_week)
+    }
+
+    pub async fn online_time(&self, exe: &mut Executor<'_>) -> Result<i64> {
+        Ok(exe
+            .one(query!("SELECT activity FROM wynn WHERE id=?", self))
+            .await
+            .context("Failed to get wynn.activity")?
+            .activity)
+    }
+
+    pub async fn weekly_online_time(&self, exe: &mut Executor<'_>) -> Result<i64> {
+        Ok(exe
+            .one(query!("SELECT activity_week FROM wynn WHERE id=?", self))
+            .await
+            .context("Failed to get wynn.activity_week")?
+            .activity_week)
+    }
+
+    pub async fn average_online_time(&self, exe: &mut Executor<'_>) -> Result<i64> {
+        Ok(exe
+            .one(query!("SELECT activity_avg FROM wynn WHERE id=?", self))
+            .await
+            .context("Failed to get wynn.activity_avg")?
+            .activity_avg)
+    }
+
+    pub async fn average_online_time_range(&self, exe: &mut Executor<'_>) -> Result<i64> {
+        Ok(exe
+            .one(query!("SELECT activity_avg_range FROM wynn WHERE id=?", self))
+            .await
+            .context("Failed to get wynn.activity_avg_range")?
+            .activity_avg_range)
     }
 
     /// Get list of all tracked igns, aka igns that is linked with a member

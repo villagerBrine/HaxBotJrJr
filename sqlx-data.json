@@ -214,6 +214,24 @@
     },
     "query": "SELECT id FROM guild WHERE id=?"
   },
+  "41f7c0a64b5a9a4165e77f86401a64ed698db9b49147f2e39a5d0a69e4c809a2": {
+    "describe": {
+      "columns": [
+        {
+          "name": "activity_avg_range",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT activity_avg_range FROM wynn WHERE id=?"
+  },
   "43170d0b5b5ebe7e325ff1cd8e4a63afbda45d4f8c7f21be397c43c0b7058047": {
     "describe": {
       "columns": [
@@ -231,6 +249,42 @@
       }
     },
     "query": "SELECT mid FROM discord WHERE id=?"
+  },
+  "49dcf71c596f7049fe6a7263eee094ee4e7bdef9197bdbdeb99d5ad628b9111c": {
+    "describe": {
+      "columns": [
+        {
+          "name": "message_week",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT message_week FROM discord WHERE id=?"
+  },
+  "4b2b597820f8a9ef9ee693e9497ed61a197ba37f46bdff15efde36558f9ae834": {
+    "describe": {
+      "columns": [
+        {
+          "name": "xp_week",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT xp_week FROM guild WHERE id=?"
   },
   "4ccfa9481bb9b7387febf4bc6525bbac370f7513019c0430b8651feab6b373c4": {
     "describe": {
@@ -370,6 +424,24 @@
     },
     "query": "UPDATE guild SET rank=? WHERE id=?"
   },
+  "525c0e2f9ee34bcf7c86e44625a4d2d9edfee4e8035470fab89a22cf51ca6e80": {
+    "describe": {
+      "columns": [
+        {
+          "name": "message",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT message FROM discord WHERE id=?"
+  },
   "5536017d412855eab615e3931fc64b7b4f1c28a2c1250e7c158dc95c2401ac28": {
     "describe": {
       "columns": [],
@@ -478,6 +550,24 @@
     },
     "query": "INSERT INTO member (discord,mcid,type,rank) VALUES (?,?,?,?)"
   },
+  "6d34b54440ce1fc02126133a7778aaa5173d71c24fb72726954c1a62eecc2763": {
+    "describe": {
+      "columns": [
+        {
+          "name": "voice",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT voice FROM discord WHERE id=?"
+  },
   "6ff15d541f56f4147624b846cfa333b858dc9c89b3a59fdf4fb0cbfca11238d5": {
     "describe": {
       "columns": [
@@ -542,6 +632,24 @@
     },
     "query": "SELECT mcid FROM member where oid=?"
   },
+  "79b895971414501439a333daebcca439db4fe96ffe7deb930937072aba7b34e1": {
+    "describe": {
+      "columns": [
+        {
+          "name": "voice_week",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT voice_week FROM discord WHERE id=?"
+  },
   "82d43343a59afd4d74b1f57cb30ad386454afb70c224224b83b8d015126c9a78": {
     "describe": {
       "columns": [
@@ -596,6 +704,24 @@
     },
     "query": "SELECT rank FROM guild WHERE id=?"
   },
+  "88230d8fd60a4a6800308f879b0d8aa089d5f1d08394fd6ae27014d9b0c6cbee": {
+    "describe": {
+      "columns": [
+        {
+          "name": "activity_week",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT activity_week FROM wynn WHERE id=?"
+  },
   "8b8ba1187604617352a61ea6bb28ad2255538d8e97d0b7e9e50eb5b8c19e5748": {
     "describe": {
       "columns": [
@@ -633,6 +759,24 @@
       }
     },
     "query": "INSERT INTO guild (id,rank) VALUES (?,?) "
+  },
+  "9c80dbd89b19f1e5f8265d962330de54f2d11045df8402c88dc034523161f975": {
+    "describe": {
+      "columns": [
+        {
+          "name": "mcid",
+          "ordinal": 0,
+          "type_info": "Text"
+        }
+      ],
+      "nullable": [
+        true
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT mcid FROM member WHERE oid=?"
   },
   "9e20c2fff7e825980593111a8bdb32fff63af7af7bff64f0d5b1736dbd1f6062": {
     "describe": {
@@ -742,6 +886,24 @@
     },
     "query": "UPDATE guild SET xp_week=0"
   },
+  "b0e2738b93717c2817805ad05175060f25d5f293e64d23105e1189cc3dce4777": {
+    "describe": {
+      "columns": [
+        {
+          "name": "activity_avg",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT activity_avg FROM wynn WHERE id=?"
+  },
   "b9ba586911d78b18b8f600799219fe27f8f2b8b9b115857e89c34032d074b722": {
     "describe": {
       "columns": [
@@ -826,6 +988,24 @@
     },
     "query": "SELECT * FROM discord WHERE id=?"
   },
+  "cf31fd5e3d3ec7b75be7604be73c53d785bc5463c5eab472d42a1831f23915bb": {
+    "describe": {
+      "columns": [
+        {
+          "name": "activity",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        false
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT activity FROM wynn WHERE id=?"
+  },
   "d405792658b5388c803ec8c4eea29ab422c4cb9664effe9e8cdcf49d4e10a516": {
     "describe": {
       "columns": [
@@ -863,6 +1043,24 @@
       }
     },
     "query": "UPDATE wynn SET ign=? WHERE id=?"
+  },
+  "e19e413ffc162d1ffe8c04a7e59444cfefad3fd072d83e0e1da77630bbede572": {
+    "describe": {
+      "columns": [
+        {
+          "name": "discord",
+          "ordinal": 0,
+          "type_info": "Int64"
+        }
+      ],
+      "nullable": [
+        true
+      ],
+      "parameters": {
+        "Right": 1
+      }
+    },
+    "query": "SELECT discord FROM member WHERE oid=?"
   },
   "e562a81049297f705bffcd684272b19499026915dc7ee8909a837b73b2250202": {
     "describe": {

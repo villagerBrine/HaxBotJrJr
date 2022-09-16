@@ -85,6 +85,10 @@ impl Transaction {
         self.tx.commit().await.context("Failed to commit db transaction")
     }
 
+    pub async fn rollback(self) -> Result<()> {
+        self.tx.rollback().await.context("Failed to abort db transaction")
+    }
+
     /// Broadcast an event
     pub fn signal(&self, event: DBEvent) {
         self.signal.signal(event);
